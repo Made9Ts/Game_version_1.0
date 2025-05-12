@@ -1,0 +1,39 @@
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+eclipse.project.name = appName + '-core'
+
+dependencies {
+  api "com.badlogicgames.box2dlights:box2dlights:$box2dlightsVersion"
+  api "com.badlogicgames.gdx-controllers:gdx-controllers-core:$gdxControllersVersion"
+  api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
+  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-bullet:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+  api "org.apache.groovy:groovy-all:$groovyVersion"
+
+  if(enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
+  }
+}
+
+// Исключение конфликтующих файлов
+jar {
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  exclude 'META-INF/INDEX.LIST'
+  exclude 'META-INF/DEPENDENCIES'
+  exclude 'META-INF/LICENSE'
+  exclude 'META-INF/LICENSE.txt'
+  exclude 'META-INF/license.txt'
+  exclude 'META-INF/NOTICE'
+  exclude 'META-INF/NOTICE.txt'
+  exclude 'META-INF/notice.txt'
+  exclude 'META-INF/ASL2.0'
+  exclude 'META-INF/groovy-release-info.properties'
+  exclude 'META-INF/LICENSE.md'
+  exclude 'META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule'
+  
+  // Использовать INCLUDE для конкретного файла
+  filesMatching('META-INF/**') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  }
+}

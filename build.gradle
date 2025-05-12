@@ -1,0 +1,125 @@
+buildscript {
+  repositories {
+    mavenCentral()
+    maven { url 'https://s01.oss.sonatype.org' }
+    gradlePluginPortal()
+    mavenLocal()
+    google()
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+  }
+  dependencies {
+    classpath 'com.android.tools.build:gradle:8.9.2'
+
+  }
+}
+
+allprojects {
+  apply plugin: 'eclipse'
+  apply plugin: 'idea'
+
+  // This allows you to "Build and run using IntelliJ IDEA", an option in IDEA's Settings.
+  idea {
+    module {
+      outputDir file('build/classes/java/main')
+      testOutputDir file('build/classes/java/test')
+    }
+  }
+  
+  // Исключение дублирующихся файлов META-INF/INDEX.LIST
+  tasks.withType(Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  }
+  
+  // Настройка обработки META-INF дубликатов
+  tasks.withType(JavaCompile) {
+    options.compilerArgs << '-Xdoclint:none'
+  }
+  
+  // Обработка файлов модулей расширения Groovy
+  tasks.withType(Jar) {
+    manifest {
+      attributes(
+        'Created-By': "Gradle ${gradle.gradleVersion}",
+        'Build-Jdk': "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
+        'Build-OS': "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}"
+      )
+    }
+    
+    // Правильная обработка для META-INF файлов
+    exclude "META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule"
+  }
+
+  // Более строгая настройка для исключения конфликтов
+  if (project.hasProperty('android')) {
+    android {
+      packagingOptions {
+        resources {
+          excludes += [
+            'META-INF/INDEX.LIST',
+            'META-INF/groovy-release-info.properties',
+            'META-INF/DEPENDENCIES',
+            'META-INF/LICENSE',
+            'META-INF/LICENSE.txt',
+            'META-INF/license.txt',
+            'META-INF/NOTICE',
+            'META-INF/NOTICE.txt',
+            'META-INF/notice.txt',
+            'META-INF/ASL2.0',
+            'META-INF/*.kotlin_module',
+            'META-INF/LICENSE.md',
+            'META-INF/LICENSE-notice.md',
+            'META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule'
+          ]
+        }
+      }
+    }
+  }
+}
+
+configure(subprojects - project(':android')) {
+  apply plugin: 'java-library'
+  apply plugin: 'groovy'
+  sourceCompatibility = 8
+
+  // From https://lyze.dev/2021/04/29/libGDX-Internal-Assets-List/
+  // The article can be helpful when using assets.txt in your project.
+  tasks.register('generateAssetList') {
+    inputs.dir("${project.rootDir}/assets/")
+    // projectFolder/assets
+    File assetsFolder = new File("${project.rootDir}/assets/")
+    // projectFolder/assets/assets.txt
+    File assetsFile = new File(assetsFolder, "assets.txt")
+    // delete that file in case we've already created it
+    assetsFile.delete()
+
+    // iterate through all files inside that folder
+    // convert it to a relative path
+    // and append it to the file assets.txt
+    fileTree(assetsFolder).collect { assetsFolder.relativePath(it) }.sort().each {
+      assetsFile.append(it + "\n")
+    }
+  }
+  processResources.dependsOn 'generateAssetList'
+
+  compileJava {
+    options.incremental = true
+  }
+}
+
+subprojects {
+  version = "$projectVersion"
+  ext.appName = 'Drop'
+  repositories {
+    mavenCentral()
+    maven { url 'https://s01.oss.sonatype.org' }
+    // You may want to remove the following line if you have errors downloading dependencies.
+    mavenLocal()
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/snapshots/' }
+    maven { url 'https://jitpack.io' }
+  }
+}
+
+eclipse.project.name = 'Drop' + '-parent'
+
