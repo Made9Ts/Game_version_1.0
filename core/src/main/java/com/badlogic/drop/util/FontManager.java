@@ -60,6 +60,11 @@ public class FontManager implements Disposable {
             // Создаем внутренний шрифт, который встроен в LibGDX
             fontGenerator = new FreeTypeFontGenerator(Gdx.files.internal("fonts/roboto.ttf"));
             
+            // Полный набор символов, включая кириллицу
+            String allChars = FreeTypeFontGenerator.DEFAULT_CHARS 
+                    + "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+                    + "ІЇҐЄіїґє";  // Украинские символы
+            
             // Параметры для заголовков
             FreeTypeFontParameter titleParams = new FreeTypeFontParameter();
             titleParams.size = 72;
@@ -71,7 +76,7 @@ public class FontManager implements Disposable {
             titleParams.shadowColor = new Color(0, 0, 0, 0.5f);
             titleParams.minFilter = Texture.TextureFilter.Linear;
             titleParams.magFilter = Texture.TextureFilter.Linear;
-            titleParams.characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+-=[]{}|;:,.<>/?\"'\\";
+            titleParams.characters = allChars;
             
             // Параметры для UI шрифта
             FreeTypeFontParameter uiParams = new FreeTypeFontParameter();
@@ -81,7 +86,7 @@ public class FontManager implements Disposable {
             uiParams.borderColor = Color.BLACK;
             uiParams.minFilter = Texture.TextureFilter.Linear;
             uiParams.magFilter = Texture.TextureFilter.Linear;
-            uiParams.characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+-=[]{}|;:,.<>/?\"'\\";
+            uiParams.characters = allChars;
             
             // Параметры для игрового шрифта
             FreeTypeFontParameter gameParams = new FreeTypeFontParameter();
@@ -91,7 +96,7 @@ public class FontManager implements Disposable {
             gameParams.borderColor = Color.BLACK;
             gameParams.minFilter = Texture.TextureFilter.Linear;
             gameParams.magFilter = Texture.TextureFilter.Linear;
-            gameParams.characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+-=[]{}|;:,.<>/?\"'\\";
+            gameParams.characters = allChars;
             
             // Параметры для маленького шрифта
             FreeTypeFontParameter smallParams = new FreeTypeFontParameter();
@@ -101,7 +106,7 @@ public class FontManager implements Disposable {
             smallParams.borderColor = Color.BLACK;
             smallParams.minFilter = Texture.TextureFilter.Linear;
             smallParams.magFilter = Texture.TextureFilter.Linear;
-            smallParams.characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+-=[]{}|;:,.<>/?\"'\\";
+            smallParams.characters = allChars;
             
             // Генерируем шрифты
             titleFont = fontGenerator.generateFont(titleParams);

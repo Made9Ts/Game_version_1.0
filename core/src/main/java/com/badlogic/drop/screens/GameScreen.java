@@ -625,8 +625,8 @@ public class GameScreen implements Screen {
             }
         }
 
-        // Топливо появляется очень редко (интервал увеличен до 2000000000 наносекунд - в 3 раза реже)
-        if (TimeUtils.nanoTime() - lastFuelTime > 2000000000L) {
+        // Топливо появляется очень редко (интервал увеличен до 6000000000 наносекунд - в 3 раза реже)
+        if (TimeUtils.nanoTime() - lastFuelTime > 6000000000L) {
             spawnFuelCanister();
         }
         
@@ -1109,8 +1109,8 @@ public class GameScreen implements Screen {
         // Добавляем топливо
         fuel = Math.min(fuel + 25, MAX_FUEL);
         
-        // Увеличиваем счет
-        addScore(100);
+        // Увеличиваем счет (снижено до 25 очков)
+        addScore(25);
         
         // Удаляем канистру
         fuelCanisters.removeValue(fuelCanister, true);

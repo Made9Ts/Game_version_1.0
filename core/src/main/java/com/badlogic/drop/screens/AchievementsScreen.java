@@ -22,6 +22,7 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.graphics.Pixmap;
 
 /**
  * Экран достижений игрока
@@ -85,6 +86,13 @@ public class AchievementsScreen implements Screen {
         skin.add("yellow", new Color(0.8f, 0.8f, 0.2f, 1));
         skin.add("red", new Color(0.8f, 0.2f, 0.2f, 1));
         
+        // Добавляем белый пиксель для использования в качестве фона
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.WHITE);
+        pixmap.fill();
+        skin.add("white", new Texture(pixmap));
+        pixmap.dispose();
+        
         // Создаем стиль кнопки
         TextButtonStyle textButtonStyle = new TextButtonStyle();
         textButtonStyle.font = skin.getFont("default-font");
@@ -131,6 +139,10 @@ public class AchievementsScreen implements Screen {
         Label titleLabel = new Label("ДОСТИЖЕНИЯ", skin, "title");
         rootTable.add(titleLabel).padBottom(50).row();
         
+        // Выводим отладочную информацию о шрифте
+        Gdx.app.log("Achievements", "Шрифт заголовка поддерживает кириллицу: " + 
+            game.fontManager.getTitleFont().getData().hasGlyph('Я'));
+        
         // Создаем таблицу для списка достижений
         Table achievementsTable = new Table();
         achievementsTable.pad(10);
@@ -166,10 +178,15 @@ public class AchievementsScreen implements Screen {
             Label progressLabel = new Label(progressText, skin, descStyle);
             achievementRow.add(progressLabel).left().expandX().padTop(5);
             
+            // Добавляем отладочную информацию для каждого достижения
+            Gdx.app.log("Achievement", id + ": " + achievement.title + 
+                " - шрифт поддерживает кириллицу: " + 
+                skin.getFont("default-font").getData().hasGlyph('Я'));
+            
             // Добавляем строку в таблицу достижений
             achievementsTable.add(achievementRow).expandX().fillX().row();
             
-            // Добавляем разделитель
+            // Добавляем разделитель, используя Drawable из скина
             if (ids.indexOf(id, true) < ids.size - 1) {
                 Table separator = new Table();
                 separator.pad(5);
@@ -191,6 +208,8 @@ public class AchievementsScreen implements Screen {
         backButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
+                // Пересоздаем FontManager перед переходом обратно в главное меню
+                game.recreateFontManager();
                 game.setScreen(new MainMenuScreen(game));
                 dispose();
             }
@@ -252,7 +271,16 @@ public class AchievementsScreen implements Screen {
     public void dispose() {
         // Освобождаем ресурсы
         stage.dispose();
-        skin.dispose();
+        
+        // Перед освобождением скина, удаляем из него шрифты, чтобы они не были удалены
+        // LibGDX освобождает все ресурсы, добавленные в скин, поэтому нужно удалить ссылки на шрифты
+        // перед вызовом skin.dispose()
+        if (skin != null) {
+            skin.remove("default-font", BitmapFont.class);
+            skin.remove("title-font", BitmapFont.class);
+            skin.dispose();
+        }
+        
         backgroundImage.dispose();
     }
 } 

@@ -225,9 +225,14 @@ public class MainMenuScreen implements Screen {
         // Освобождаем ресурсы
         stage.dispose();
         backgroundImage.dispose();
+        
         if (skin != null) {
+            // Перед освобождением скина, удаляем из него шрифты, чтобы они не были удалены
+            skin.remove("default-font", BitmapFont.class);
             skin.dispose();
         }
+        
         // Не требуется вручную освобождать шрифты, так как их освободит FontManager
+        // при закрытии приложения
     }
 } 
