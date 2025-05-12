@@ -233,7 +233,7 @@ public class GameScreen implements Screen {
         // Поднимаем корабль выше от нижнего края для лучшей видимости и игрового комфорта
         ship = new Rectangle();
         ship.x = GAME_WIDTH / 2 - SHIP_SIZE / 2;
-        ship.y = 250; // Поднимаем ещё выше (было 150)
+        ship.y = 325; // Поднимаем ещё выше (было 250, теперь +75)
         ship.width = SHIP_SIZE;
         ship.height = SHIP_SIZE;
 
@@ -443,7 +443,7 @@ public class GameScreen implements Screen {
             progressToNextLevel = (int)(progress * 100);
         }
         
-        // Показываем текущую сложность (от 1.0 до 5.0) и прогресс в процентах
+        // Показываем текущую сложность (от 1.0 до 10.0) и прогресс в процентах
         font.draw(game.batch, "Difficulty: " + String.format("%.1f", difficulty), 20, GAME_HEIGHT - 90);
         font.draw(game.batch, "Next level: " + progressToNextLevel + "%", 20, GAME_HEIGHT - 120);
         
@@ -463,6 +463,15 @@ public class GameScreen implements Screen {
         }
         
         font.draw(game.batch, "Fuel: " + fuelPercent + "%", 20, GAME_HEIGHT - 200);
+        
+        // Показываем текущее комбо, если оно есть
+        int comboCount = difficultySystem.getComboCount();
+        if (comboCount > 0) {
+            // Определяем цвет комбо: от желтого к красному по мере роста
+            float comboRatio = Math.min(1.0f, comboCount / 20.0f);
+            font.setColor(1.0f, 1.0f - comboRatio * 0.7f, 0.3f, 1.0f);
+            font.draw(game.batch, "Combo: x" + comboCount, 20, GAME_HEIGHT - 240);
+        }
         
         // Возвращаем цвет шрифта к белому
         font.setColor(1, 1, 1, 1);
@@ -689,7 +698,8 @@ public class GameScreen implements Screen {
             if (asteroid.y + ASTEROID_SIZE < 0) {
                 iter.remove();
                 score += 10; // Очки за уклонение от астероида
-                difficultySystem.registerSuccess(); // Регистрируем успех
+                // Используем специализированный метод для уклонения
+                difficultySystem.registerDodge();
             }
             
             // Обработка столкновения с кораблем
@@ -715,7 +725,8 @@ public class GameScreen implements Screen {
             if (enemy.y + ENEMY_SIZE < 0) {
                 iter.remove();
                 score += 30; // Больше очков за уклонение от врага
-                difficultySystem.registerSuccess(); // Регистрируем успех
+                // Используем специализированный метод для уклонения
+                difficultySystem.registerDodge();
             }
             
             // Обработка столкновения с кораблем
@@ -1115,8 +1126,8 @@ public class GameScreen implements Screen {
         // Удаляем канистру
         fuelCanisters.removeValue(fuelCanister, true);
         
-        // Сообщаем системе сложности об успехе
-        difficultySystem.registerSuccess();
+        // Сообщаем системе сложности об успехе - используем новый метод
+        difficultySystem.registerFuelCollection();
         
         // Воспроизводим звук сбора
         collectSound.play();

@@ -3,8 +3,9 @@ package com.badlogic.drop.systems;
 import com.badlogic.gdx.math.MathUtils;
 
 /**
- * Система динамически адаптируемой сложности игры
- * Регулирует уровень сложности на основе успехов и неудач игрока
+ * Усовершенствованная система динамически адаптируемой сложности игры
+ * Регулирует уровень сложности на основе успехов, неудач игрока и различных игровых метрик
+ * Включает систему зон комфорта и систему подстраивания под стиль игры
  */
 public class DifficultySystem {
     // Базовая сложность
@@ -16,33 +17,57 @@ public class DifficultySystem {
     // Оценка умения игрока (от 0.5 до 2.0)
     private float playerSkill;
     
-    // Счетчики успехов и неудач
-    private int successCount;
-    private int failureCount;
+    // Метрики игрока
+    private int successCount;     // Успешные действия (уклонения, сбор топлива)
+    private int failureCount;     // Неудачи (столкновения)
+    private float survivalTime;   // Время выживания на текущем уровне
+    private int comboActions;     // Счетчик последовательных успешных действий
+    private float comboTimer;     // Таймер комбо
+    
+    // Параметры игрового стиля
+    private float aggressivePlayStyle;    // 0.0 = осторожный, 1.0 = агрессивный
+    private float collectorPlayStyle;     // 0.0 = игнорирует сбор, 1.0 = активно собирает
     
     // Прогресс игрока (счет)
     private int lastScore;
     
-    // Система уровней
+    // Система уровней с увеличенным максимумом
     private int currentLevel;
     private int scoreForNextLevel;
-    private int[] levelThresholds = {0, 500, 1200, 2000, 3000, 5000, 8000, 12000, 17000, 25000};
+    private int[] levelThresholds = {
+        0, 500, 1200, 2000, 3000, 5000, 8000, 12000, 17000, 25000, 
+        35000, 50000, 70000, 100000, 150000, 200000, 250000, 300000
+    };
     
     // Постоянные значения
     private static final float MIN_DIFFICULTY = 1.0f;
-    private static final float MAX_DIFFICULTY = 5.0f;
+    private static final float MAX_DIFFICULTY = 10.0f;      // Увеличен максимум сложности
     private static final float MIN_PLAYER_SKILL = 0.5f;
     private static final float MAX_PLAYER_SKILL = 2.0f;
+    private static final float MAX_COMBO_TIME = 5.0f;       // Время для поддержания комбо (сек)
     
     // Коэффициенты для расчетов
-    private static final float DIFFICULTY_PROGRESSION_RATE = 0.0005f; // Насколько быстро растет базовая сложность
-    private static final float PLAYER_SKILL_SUCCESS_DELTA = 0.05f;    // Увеличение навыка при успехе
-    private static final float PLAYER_SKILL_FAILURE_DELTA = 0.1f;     // Уменьшение навыка при неудаче
-    private static final float PLAYER_SKILL_WEIGHT = 0.7f;            // Вес навыка в формуле сложности
-    private static final float DIFFICULTY_SMOOTHING = 0.1f;           // Скорость изменения сложности
+    private static final float DIFFICULTY_PROGRESSION_RATE = 0.0003f;    // Снижена скорость роста базовой сложности
+    private static final float PLAYER_SKILL_SUCCESS_DELTA = 0.02f;       // Снижено влияние успехов
+    private static final float PLAYER_SKILL_FAILURE_DELTA = 0.05f;       // Снижено влияние неудач
+    private static final float PLAYER_SKILL_WEIGHT = 0.6f;               // Снижен вес навыка
+    private static final float DIFFICULTY_SMOOTHING = 0.05f;             // Более плавное изменение сложности
+    private static final float PLAY_STYLE_ADAPTATION_RATE = 0.01f;       // Скорость адаптации под стиль игры
+    
+    // Зона комфорта - контролирует вызовы игрока
+    private float comfortZoneMin = 0.8f;   // Минимальный уровень относительно базовой сложности
+    private float comfortZoneMax = 1.2f;   // Максимальный уровень относительно базовой сложности
+    private float comfortZoneTimer = 0;    // Время пребывания в зоне комфорта
+    private static final float COMFORT_ZONE_EXPAND_TIME = 60.0f;  // Через сколько секунд расширять зону
     
     // Событие смены уровня
     private boolean levelChanged;
+    private int lastLevelChangeScore;  // Счет, при котором последний раз менялся уровень
+    
+    // Флаги для игровых событий
+    private boolean recentFailure;     // Произошла недавняя неудача
+    private boolean recentSuccess;     // Произошел недавний успех
+    private float eventCooldown;       // Время до сброса флагов событий
     
     /**
      * Конструктор системы сложности
@@ -64,6 +89,20 @@ public class DifficultySystem {
         currentLevel = 1;
         scoreForNextLevel = levelThresholds[1];
         levelChanged = false;
+        lastLevelChangeScore = 0;
+        
+        // Сброс новых параметров
+        survivalTime = 0;
+        comboActions = 0;
+        comboTimer = 0;
+        aggressivePlayStyle = 0.5f;
+        collectorPlayStyle = 0.5f;
+        comfortZoneMin = 0.8f;
+        comfortZoneMax = 1.2f;
+        comfortZoneTimer = 0;
+        recentFailure = false;
+        recentSuccess = false;
+        eventCooldown = 0;
     }
     
     /**
@@ -74,17 +113,69 @@ public class DifficultySystem {
     public void update(int score, float delta) {
         levelChanged = false;
         
+        // Увеличиваем время выживания
+        survivalTime += delta;
+        
+        // Обновляем таймер комбо
+        if (comboActions > 0) {
+            comboTimer -= delta;
+            if (comboTimer <= 0) {
+                comboActions = 0;
+            }
+        }
+        
+        // Обновляем таймер зоны комфорта
+        comfortZoneTimer += delta;
+        if (comfortZoneTimer >= COMFORT_ZONE_EXPAND_TIME) {
+            // Постепенно расширяем зону комфорта
+            comfortZoneMin = Math.max(0.6f, comfortZoneMin - 0.01f);
+            comfortZoneMax = Math.min(1.4f, comfortZoneMax + 0.01f);
+            comfortZoneTimer = 0;
+        }
+        
+        // Обновляем кулдаун событий
+        if (eventCooldown > 0) {
+            eventCooldown -= delta;
+            if (eventCooldown <= 0) {
+                recentFailure = false;
+                recentSuccess = false;
+            }
+        }
+        
         // Обновляем базовую сложность на основе прогресса игрока
         if (score > lastScore) {
-            baseDifficulty += (score - lastScore) * DIFFICULTY_PROGRESSION_RATE;
+            float scoreDelta = score - lastScore;
+            
+            // Учитываем стиль игры при увеличении сложности
+            float difficultyDelta = scoreDelta * DIFFICULTY_PROGRESSION_RATE;
+            
+            // Агрессивные игроки получают больший прирост сложности
+            if (aggressivePlayStyle > 0.5f) {
+                difficultyDelta *= 1.0f + (aggressivePlayStyle - 0.5f);
+            }
+            
+            baseDifficulty += difficultyDelta;
             lastScore = score;
             
             // Проверяем достижение нового уровня
             checkLevelProgress(score);
         }
         
-        // Рассчитываем целевую сложность на основе навыка игрока
+        // Рассчитываем целевую сложность на основе навыка игрока и зоны комфорта
         float targetDifficulty = calculateTargetDifficulty();
+        
+        // Учитываем комбо для временного повышения сложности
+        if (comboActions >= 5) {
+            float comboBonus = Math.min(0.5f, comboActions * 0.05f);
+            targetDifficulty += comboBonus;
+        }
+        
+        // Учитываем недавние события для более динамичных изменений
+        if (recentFailure) {
+            targetDifficulty *= 0.9f; // Временное снижение после неудачи
+        } else if (recentSuccess) {
+            targetDifficulty *= 1.1f; // Временное повышение после успеха
+        }
         
         // Плавно изменяем текущую сложность к целевой
         currentDifficulty = MathUtils.lerp(currentDifficulty, targetDifficulty, DIFFICULTY_SMOOTHING * delta);
@@ -100,12 +191,38 @@ public class DifficultySystem {
     private void checkLevelProgress(int score) {
         // Проверяем, достигли ли мы порога следующего уровня
         if (score >= scoreForNextLevel && currentLevel < levelThresholds.length - 1) {
-            currentLevel++;
-            scoreForNextLevel = levelThresholds[currentLevel];
+            int oldLevel = currentLevel;
+            
+            // Определяем точный новый уровень (может перескочить несколько)
+            while (currentLevel < levelThresholds.length - 1 && score >= levelThresholds[currentLevel]) {
+                currentLevel++;
+            }
+            
+            // Устанавливаем счет для следующего уровня
+            if (currentLevel < levelThresholds.length - 1) {
+                scoreForNextLevel = levelThresholds[currentLevel];
+            } else {
+                // Для последнего уровня создаем бесконечную прогрессию
+                scoreForNextLevel = levelThresholds[currentLevel] + 100000;
+            }
+            
             levelChanged = true;
+            lastLevelChangeScore = score;
             
             // При переходе на новый уровень увеличиваем базовую сложность
-            baseDifficulty += 0.3f;
+            // Большой скачок уровня = больший прирост сложности
+            float levelDelta = currentLevel - oldLevel;
+            baseDifficulty += 0.2f * levelDelta;
+            
+            // Сбрасываем время выживания при переходе на новый уровень
+            survivalTime = 0;
+            
+            // Сужаем зону комфорта при переходе на новый уровень
+            comfortZoneMin = Math.min(0.9f, comfortZoneMin + 0.05f);
+            comfortZoneMax = Math.max(1.1f, comfortZoneMax - 0.05f);
+            comfortZoneTimer = 0;
+            
+            // Ограничиваем базовую сложность
             baseDifficulty = MathUtils.clamp(baseDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY);
         }
     }
@@ -116,14 +233,52 @@ public class DifficultySystem {
     public void registerSuccess() {
         successCount++;
         
+        // Увеличиваем счетчик комбо и сбрасываем таймер
+        comboActions++;
+        comboTimer = MAX_COMBO_TIME;
+        
         // Увеличиваем оценку навыка игрока
-        playerSkill += PLAYER_SKILL_SUCCESS_DELTA;
+        float skillDelta = PLAYER_SKILL_SUCCESS_DELTA;
+        
+        // Бонус к навыку за длинное комбо
+        if (comboActions > 10) {
+            skillDelta *= 1.5f;
+        }
+        
+        playerSkill += skillDelta;
         playerSkill = MathUtils.clamp(playerSkill, MIN_PLAYER_SKILL, MAX_PLAYER_SKILL);
         
+        // Устанавливаем флаг недавнего успеха
+        recentSuccess = true;
+        recentFailure = false;
+        eventCooldown = 2.0f;
+        
         // Каждые 10 успехов сбрасываем счетчики, сохраняя отношение
-        if (successCount + failureCount >= 10) {
+        if (successCount + failureCount >= 15) {
             recalculateSkillRatio();
         }
+    }
+    
+    /**
+     * Регистрирует сбор топлива (отдельный тип успеха)
+     */
+    public void registerFuelCollection() {
+        // Увеличиваем метрику сбора
+        collectorPlayStyle = MathUtils.clamp(collectorPlayStyle + PLAY_STYLE_ADAPTATION_RATE, 0.0f, 1.0f);
+        
+        // Также регистрируем как обычный успех
+        registerSuccess();
+    }
+    
+    /**
+     * Регистрирует уклонение от препятствия (отдельный тип успеха)
+     */
+    public void registerDodge() {
+        // Увеличиваем метрику агрессивного стиля
+        aggressivePlayStyle = MathUtils.clamp(aggressivePlayStyle + PLAY_STYLE_ADAPTATION_RATE, 0.0f, 1.0f);
+        
+        // Также регистрируем как обычный успех
+        registerSuccess();
     }
     
     /**
@@ -132,12 +287,27 @@ public class DifficultySystem {
     public void registerFailure() {
         failureCount++;
         
+        // Сбрасываем комбо
+        comboActions = 0;
+        
         // Уменьшаем оценку навыка игрока
-        playerSkill -= PLAYER_SKILL_FAILURE_DELTA;
+        float skillDelta = PLAYER_SKILL_FAILURE_DELTA;
+        
+        // Уменьшаем влияние неудачи для осторожных игроков
+        if (aggressivePlayStyle < 0.5f) {
+            skillDelta *= 0.7f + aggressivePlayStyle;
+        }
+        
+        playerSkill -= skillDelta;
         playerSkill = MathUtils.clamp(playerSkill, MIN_PLAYER_SKILL, MAX_PLAYER_SKILL);
         
+        // Устанавливаем флаг недавней неудачи
+        recentFailure = true;
+        recentSuccess = false;
+        eventCooldown = 3.0f;
+        
         // Каждые 10 действий сбрасываем счетчики, сохраняя отношение
-        if (successCount + failureCount >= 10) {
+        if (successCount + failureCount >= 15) {
             recalculateSkillRatio();
         }
     }
@@ -150,17 +320,26 @@ public class DifficultySystem {
             // Сохраняем соотношение успехов и неудач
             float ratio = (float) successCount / (successCount + failureCount);
             
-            // Сбрасываем счетчики
-            successCount = 0;
-            failureCount = 0;
+            // Анализируем стиль игры на основе статистики
+            if (ratio > 0.8f && aggressivePlayStyle < 0.7f) {
+                // Успешный осторожный игрок - постепенно увеличиваем вызов
+                aggressivePlayStyle += 0.05f;
+            } else if (ratio < 0.4f && aggressivePlayStyle > 0.3f) {
+                // Неуспешный агрессивный игрок - снижаем вызов
+                aggressivePlayStyle -= 0.05f;
+            }
+            
+            // Сбрасываем счетчики, но сохраняем некоторое "эхо" предыдущих результатов
+            successCount = (int)(successCount * 0.2f);
+            failureCount = (int)(failureCount * 0.2f);
             
             // Дополнительная корректировка навыка на основе соотношения
             if (ratio > 0.7f) {
                 // Если игрок успешен более чем в 70% случаев, немного увеличиваем сложность
-                playerSkill += PLAYER_SKILL_SUCCESS_DELTA;
+                playerSkill += PLAYER_SKILL_SUCCESS_DELTA * 0.5f;
             } else if (ratio < 0.3f) {
                 // Если игрок успешен менее чем в 30% случаев, немного уменьшаем сложность
-                playerSkill -= PLAYER_SKILL_FAILURE_DELTA;
+                playerSkill -= PLAYER_SKILL_FAILURE_DELTA * 0.5f;
             }
             
             playerSkill = MathUtils.clamp(playerSkill, MIN_PLAYER_SKILL, MAX_PLAYER_SKILL);
@@ -174,7 +353,32 @@ public class DifficultySystem {
     private float calculateTargetDifficulty() {
         // Базовая формула: базовая сложность + модификатор на основе навыка
         float skillModifier = (playerSkill - 1.0f) * PLAYER_SKILL_WEIGHT;
-        return baseDifficulty * (1.0f + skillModifier);
+        
+        // Добавляем влияние стиля игры
+        float styleModifier = 0;
+        
+        // Агрессивным игрокам увеличиваем сложность
+        if (aggressivePlayStyle > 0.6f) {
+            styleModifier += (aggressivePlayStyle - 0.6f) * 0.5f;
+        }
+        
+        // Активным сборщикам немного понижаем сложность для баланса
+        if (collectorPlayStyle > 0.7f) {
+            styleModifier -= (collectorPlayStyle - 0.7f) * 0.3f;
+        }
+        
+        // Добавляем бонус сложности за длительное выживание на уровне
+        float survivalBonus = Math.min(0.2f, survivalTime * 0.001f);
+        
+        // Итоговая формула с учетом всех факторов
+        float targetDifficulty = baseDifficulty * (1.0f + skillModifier + styleModifier + survivalBonus);
+        
+        // Применяем ограничения зоны комфорта
+        float minDifficulty = baseDifficulty * comfortZoneMin;
+        float maxDifficulty = baseDifficulty * comfortZoneMax;
+        
+        // Ограничиваем целевую сложность зоной комфорта
+        return MathUtils.clamp(targetDifficulty, minDifficulty, maxDifficulty);
     }
     
     /**
@@ -227,5 +431,45 @@ public class DifficultySystem {
             return levelThresholds[level];
         }
         return 0;
+    }
+    
+    /**
+     * Возвращает текущее количество очков комбо
+     * @return количество очков комбо
+     */
+    public int getComboCount() {
+        return comboActions;
+    }
+    
+    /**
+     * Возвращает оставшееся время комбо
+     * @return оставшееся время комбо в секундах
+     */
+    public float getComboTimeRemaining() {
+        return comboTimer;
+    }
+    
+    /**
+     * Возвращает значение агрессивности стиля игры
+     * @return величина от 0.0 до 1.0
+     */
+    public float getAggressivePlayStyle() {
+        return aggressivePlayStyle;
+    }
+    
+    /**
+     * Возвращает значение стиля коллекционирования
+     * @return величина от 0.0 до 1.0
+     */
+    public float getCollectorPlayStyle() {
+        return collectorPlayStyle;
+    }
+    
+    /**
+     * Возвращает прогресс в расширении зоны комфорта
+     * @return величина от 0.0 до 1.0
+     */
+    public float getComfortZoneProgress() {
+        return comfortZoneTimer / COMFORT_ZONE_EXPAND_TIME;
     }
 } 
