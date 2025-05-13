@@ -48,13 +48,17 @@ public class GameScreen implements Screen {
     private static final int HEART_SIZE = 48;
     private static final int POWERUP_SIZE = 64;
     private static final float POWERUP_ICON_SIZE = 40;
+    private static final int BOSS_PROJECTILE_SIZE = 48; // Размер снаряда босса
+    private static final int PLAYER_PROJECTILE_SIZE = 32; // Размер снаряда игрока
 
     // Константы игрового процесса
     private static final int SHIP_SPEED = 500;
     private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 2.8f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
+    private static final float FUEL_CONSUMPTION = 1f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
     private static final int MAX_LIVES = 3;
+    private static final float PLAYER_PROJECTILE_SPEED = 400f; // Скорость снаряда игрока
+    private static final long PLAYER_SHOOT_COOLDOWN = 500000000L; // Задержка между выстрелами игрока (0.5 сек)
 
     // Константы интервалов появления объектов
     private static final long GROUP_PAUSE = 2000000000L; // Уменьшено с 3000000000L до 2000000000L
@@ -82,6 +86,9 @@ public class GameScreen implements Screen {
     private Texture speedBoostTexture;
     private Texture magnetTexture;
     private Texture doubleScoreTexture;
+    private Texture bossTexture;
+    private Texture bossProjectileTexture; // Текстура снаряда босса
+    private Texture playerProjectileTexture; // Текстура снаряда игрока
 
     // Звуки и музыка
     private Sound collectSound;
@@ -95,6 +102,8 @@ public class GameScreen implements Screen {
     private Array<Rectangle> fuelCanisters;
     private Array<Rectangle> hearts;
     private Array<Powerup> powerups;
+    private Array<BossProjectile> bossProjectiles; // Снаряды босса
+    private Array<PlayerProjectile> playerProjectiles; // Снаряды игрока
 
     // Статистика для достижений
     private float gameTime;
@@ -123,9 +132,9 @@ public class GameScreen implements Screen {
 
     // Параметры групп объектов
     private int asteroidsInGroup = 0;
-    private int maxAsteroidsPerGroup = 5; // Увеличено с 3 до 5
+    private int maxAsteroidsPerGroup = 1; // Увеличено с 3 до 5
     private int enemiesInGroup = 0;
-    private int maxEnemiesPerGroup = 3; // Увеличено с 2 до 3
+    private int maxEnemiesPerGroup = 1; // Увеличено с 2 до 3
 
     // Анимация нового уровня
     private boolean showLevelUpAnimation;
@@ -152,6 +161,25 @@ public class GameScreen implements Screen {
 
     // Внутренние флаги отрисовки
     private boolean forceGameOverRender = false;
+
+    // Константы для боссов
+    private static final int BOSS_SIZE = 160;
+    private static final int BOSS_HEALTH_MAX = 20;
+    private static final float BOSS_SPEED = 80f;
+    private static final float BOSS_PROJECTILE_SPEED = 200f; // Скорость снаряда босса
+    private static final long BOSS_SHOOT_INTERVAL = 1500000000L; // Интервал стрельбы (1.5 секунды)
+
+    // Параметры боссов
+    private Rectangle boss;
+    private boolean bossActive;
+    private int bossHealth;
+    private float bossMoveDirection = 1f; // 1 = вправо, -1 = влево
+    private long lastBossAttackTime;
+    private boolean bossDefeated;
+    private float bossInvulnerabilityTimer;
+
+    // Параметры стрельбы игрока
+    private long lastPlayerShootTime = 0; // Время последнего выстрела игрока
 
     /**
      * Класс для бонусов в игре
@@ -183,6 +211,81 @@ public class GameScreen implements Screen {
         SPEED_BOOST,   // Увеличение скорости
         MAGNET,        // Притягивает топливо и сердечки
         DOUBLE_SCORE   // Удвоение очков
+    }
+
+    /**
+     * Класс для снарядов босса
+     */
+    private class BossProjectile {
+        Rectangle bounds;
+        float speedX;
+        float speedY;
+        
+        /**
+         * Создает новый снаряд босса в указанной позиции
+         */
+        BossProjectile(float x, float y) {
+            this.bounds = new Rectangle(x, y, BOSS_PROJECTILE_SIZE, BOSS_PROJECTILE_SIZE);
+            
+            // Направляем снаряд в сторону игрока
+            float dx = ship.x + ship.width/2 - x;
+            float dy = ship.y + ship.height/2 - y;
+            
+            // Нормализуем вектор
+            float length = (float)Math.sqrt(dx*dx + dy*dy);
+            if (length != 0) {
+                dx /= length;
+                dy /= length;
+            }
+            
+            // Устанавливаем скорость снаряда
+            this.speedX = dx * BOSS_PROJECTILE_SPEED;
+            this.speedY = dy * BOSS_PROJECTILE_SPEED;
+        }
+        
+        /**
+         * Обновляет позицию снаряда
+         */
+        void update(float delta) {
+            bounds.x += speedX * delta;
+            bounds.y += speedY * delta;
+        }
+        
+        /**
+         * Проверяет, находится ли снаряд за пределами экрана
+         */
+        boolean isOutOfScreen() {
+            return bounds.x < -bounds.width || bounds.x > GAME_WIDTH || 
+                   bounds.y < -bounds.height || bounds.y > GAME_HEIGHT;
+        }
+    }
+
+    /**
+     * Класс для снарядов игрока
+     */
+    private class PlayerProjectile {
+        Rectangle bounds;
+        
+        /**
+         * Создает новый снаряд игрока в указанной позиции
+         */
+        PlayerProjectile(float x, float y) {
+            this.bounds = new Rectangle(x, y, PLAYER_PROJECTILE_SIZE, PLAYER_PROJECTILE_SIZE);
+        }
+        
+        /**
+         * Обновляет позицию снаряда (движение вверх)
+         */
+        void update(float delta) {
+            bounds.y += PLAYER_PROJECTILE_SPEED * delta;
+        }
+        
+        /**
+         * Проверяет, находится ли снаряд за пределами экрана
+         */
+        boolean isOutOfScreen() {
+            return bounds.y > GAME_HEIGHT;
+        }
     }
 
     /**
@@ -246,6 +349,9 @@ public class GameScreen implements Screen {
         enemyImage = new Texture(Gdx.files.internal("enemy.png"));
         enemyImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
+        bossTexture = new Texture(Gdx.files.internal("boss.png"));
+        bossTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+
         fuelImage = new Texture(Gdx.files.internal("fuel.png"));
         fuelImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
@@ -263,6 +369,12 @@ public class GameScreen implements Screen {
         speedBoostTexture = new Texture(Gdx.files.internal("speed.png"));
         magnetTexture = new Texture(Gdx.files.internal("magnet.png"));
         doubleScoreTexture = new Texture(Gdx.files.internal("double_score.png"));
+
+        bossProjectileTexture = new Texture(Gdx.files.internal("boss_projectile.png"));
+        bossProjectileTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        
+        playerProjectileTexture = new Texture(Gdx.files.internal("player_projectile.png"));
+        playerProjectileTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
         // Загрузка звуков
         collectSound = Gdx.audio.newSound(Gdx.files.internal("collect.wav"));
@@ -288,6 +400,8 @@ public class GameScreen implements Screen {
         fuelCanisters = new Array<Rectangle>();
         hearts = new Array<Rectangle>(); // Инициализация коллекции сердечек
         powerups = new Array<Powerup>(); // Инициализация коллекции бонусов
+        bossProjectiles = new Array<BossProjectile>(); // Инициализация коллекции снарядов босса
+        playerProjectiles = new Array<PlayerProjectile>(); // Инициализация коллекции снарядов игрока
 
         // Сброс игровых параметров
         score = 0;
@@ -307,6 +421,14 @@ public class GameScreen implements Screen {
         magnetActive = false;
         doubleScoreActive = false;
 
+        // Сбрасываем состояние боссов
+        bossActive = false;
+        bossDefeated = false;
+        bossHealth = 0;
+        boss = null;
+        bossProjectiles.clear(); // Очищаем снаряды босса
+        playerProjectiles.clear(); // Очищаем снаряды игрока
+
         // Сброс системы сложности
         difficultySystem.reset();
 
@@ -320,6 +442,9 @@ public class GameScreen implements Screen {
         if (game.achievementSystem.unlockAchievement(AchievementSystem.ACHIEVEMENT_FIRST_FLIGHT)) {
             showAchievementNotification("Достижение разблокировано: Первый полет");
         }
+
+        // Сброс параметров стрельбы
+        lastPlayerShootTime = 0;
 
         // Создание первых объектов
         spawnAsteroid();
@@ -686,12 +811,17 @@ public class GameScreen implements Screen {
         font.draw(game.batch, "Difficulty: " + String.format("%.1f", difficulty), 20, GAME_HEIGHT - 90);
         font.draw(game.batch, "Next level: " + progressToNextLevel + "%", 20, GAME_HEIGHT - 120);
 
-        // Отображение оставшихся жизней
-        font.draw(game.batch, "Lives: " + lives, 20, GAME_HEIGHT - 160);
-
         // Отображение уровня топлива в процентах
         int fuelPercent = (int)((fuel / MAX_FUEL) * 100);
 
+        // Отображение иконки топлива с процентным значением в нижнем левом углу
+        float fuelIconSize = 35; // Размер иконки топлива
+        float fuelTextOffsetX = fuelIconSize + 10; // Отступ для текста процента
+        float fuelY = 40; // Позиция Y для топлива
+        
+        // Рисуем иконку топлива
+        game.batch.draw(fuelImage, 20, fuelY, fuelIconSize, fuelIconSize);
+        
         // Меняем цвет текста в зависимости от уровня топлива
         if (fuelPercent > 60) {
             font.setColor(0.2f, 0.8f, 0.2f, 1.0f); // Зеленый для безопасного уровня
@@ -701,7 +831,30 @@ public class GameScreen implements Screen {
             font.setColor(0.8f, 0.2f, 0.2f, 1.0f); // Красный для опасного уровня
         }
 
-        font.draw(game.batch, "Fuel: " + fuelPercent + "%", 20, GAME_HEIGHT - 200);
+        // Рисуем процент топлива рядом с иконкой
+        font.draw(game.batch, fuelPercent + "%", 20 + fuelTextOffsetX, fuelY + fuelIconSize/2 + 5);
+        
+        // Отображение оставшихся жизней в виде иконок сердечек в нижнем левом углу
+        float heartIconSize = 40; // Увеличенный размер иконки сердечка
+        float heartSpacing = 10; // Расстояние между сердечками
+        float heartsStartX = 20; // Начальная позиция X для сердечек (слева)
+        float heartsY = 80; // Позиция Y для сердечек (нижняя часть экрана)
+        
+        // Отрисовка сердечек в соответствии с числом жизней
+        for (int i = 0; i < MAX_LIVES; i++) {
+            if (i < lives) {
+                // Полное сердечко для имеющихся жизней
+                game.batch.setColor(1, 1, 1, 1);
+            } else {
+                // Прозрачное сердечко для потерянных жизней
+                game.batch.setColor(1, 1, 1, 0.3f);
+            }
+            game.batch.draw(heartImage, heartsStartX + i * (heartIconSize + heartSpacing), heartsY, heartIconSize, heartIconSize);
+        }
+        
+        // Возвращаем нормальный цвет
+        game.batch.setColor(1, 1, 1, 1);
+        font.setColor(1, 1, 1, 1);
 
         // Показываем текущее комбо, если оно есть
         int comboCount = difficultySystem.getComboCount();
@@ -846,39 +999,43 @@ public class GameScreen implements Screen {
         }
 
         // Создание новых объектов (сложность влияет на частоту появления)
-        // Используем систему групп для астероидов
-        if (TimeUtils.nanoTime() - lastAsteroidTime > 2000000000L / difficulty) { // Уменьшено с 2500000000L до 2000000000L
-            // Проверяем, нужно ли делать паузу между группами
-            if (asteroidsInGroup < maxAsteroidsPerGroup) {
-                spawnAsteroid();
-                asteroidsInGroup++;
-            } else if (TimeUtils.nanoTime() - lastAsteroidTime > GROUP_PAUSE) {
-                // После паузы сбрасываем счетчик группы и создаем новый астероид
-                asteroidsInGroup = 1;
-                spawnAsteroid();
+        // Создаем новые объекты только если босс не активен
+        if (!bossActive) {
+            // Используем систему групп для астероидов
+            if (TimeUtils.nanoTime() - lastAsteroidTime > 2000000000L / difficulty) { // Уменьшено с 2500000000L до 2000000000L
+                // Проверяем, нужно ли делать паузу между группами
+                if (asteroidsInGroup < maxAsteroidsPerGroup) {
+                    spawnAsteroid();
+                    asteroidsInGroup++;
+                } else if (TimeUtils.nanoTime() - lastAsteroidTime > GROUP_PAUSE) {
+                    // После паузы сбрасываем счетчик группы и создаем новый астероид
+                    asteroidsInGroup = 1;
+                    spawnAsteroid();
+                }
+            }
+
+            // Враги появляются только после определенного количества очков и в зависимости от сложности
+            // Используем систему групп для врагов
+            if (score > 300 && TimeUtils.nanoTime() - lastEnemyTime > 4000000000L / difficulty) { // Уменьшен порог с 500 до 300 очков и интервал с 5000000000L до 4000000000L
+                // Проверяем, нужно ли делать паузу между группами
+                if (enemiesInGroup < maxEnemiesPerGroup) {
+                    spawnEnemy();
+                    enemiesInGroup++;
+                } else if (TimeUtils.nanoTime() - lastEnemyTime > GROUP_PAUSE) {
+                    // После паузы сбрасываем счетчик группы и создаем нового врага
+                    enemiesInGroup = 1;
+                    spawnEnemy();
+                }
             }
         }
 
-        // Враги появляются только после определенного количества очков и в зависимости от сложности
-        // Используем систему групп для врагов
-        if (score > 300 && TimeUtils.nanoTime() - lastEnemyTime > 4000000000L / difficulty) { // Уменьшен порог с 500 до 300 очков и интервал с 5000000000L до 4000000000L
-            // Проверяем, нужно ли делать паузу между группами
-            if (enemiesInGroup < maxEnemiesPerGroup) {
-                spawnEnemy();
-                enemiesInGroup++;
-            } else if (TimeUtils.nanoTime() - lastEnemyTime > GROUP_PAUSE) {
-                // После паузы сбрасываем счетчик группы и создаем нового врага
-                enemiesInGroup = 1;
-                spawnEnemy();
-            }
-        }
-
-        // Топливо появляется очень редко (интервал увеличен)
+        // Топливо появляется даже во время боя с боссом
         if (TimeUtils.nanoTime() - lastFuelTime > 11000000000L) { // Увеличено с 9000000000L до 11000000000L
             spawnFuelCanister();
         }
 
         // Сердечки появляются только если игрок потерял жизнь и они нужны (флаг needHeart)
+        // Они также доступны во время боя с боссом
         if (needHeart && TimeUtils.nanoTime() - lastHeartTime > 5000000000L) { // Редкое появление, каждые 5 секунд
             spawnHeart();
         }
@@ -894,8 +1051,23 @@ public class GameScreen implements Screen {
 
         // Применяем магнитное притяжение, если активно
         applyMagneticEffect(delta);
+
+        // Проверяет необходимость активации босса на основе текущего уровня
+        checkForBossLevel();
+
+        // Обновляет состояние босса
+        updateBoss(delta);
+        
+        // Обновляем снаряды босса
+        updateBossProjectiles(delta);
+        
+        // Обновляем снаряды игрока
+        updatePlayerProjectiles(delta);
     }
 
+    /**
+     * Обрабатывает ввод пользователя
+     */
     private void handleInput(float delta) {
         // Обработка клавиши Escape для паузы
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
@@ -930,6 +1102,35 @@ public class GameScreen implements Screen {
                     pauseGame();
                 }
                 return; // Выходим из метода, чтобы не обрабатывать другие касания
+            }
+        }
+
+        // Проверка на стрельбу (только при битве с боссом)
+        if (bossActive && !isPaused && !gameOver) {
+            boolean shouldShoot = false;
+            
+            // Проверка удержания пальца на экране (непрерывная стрельба)
+            if (Gdx.input.isTouched()) {
+                // Получаем позицию касания
+                Vector3 touchPos = new Vector3();
+                touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+                camera.unproject(touchPos);
+                
+                // Проверяем, что касание не на кнопке паузы
+                if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
+                    touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
+                    shouldShoot = true;
+                }
+            }
+            
+            // Проверка нажатия пробела (непрерывная стрельба)
+            if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
+                shouldShoot = true;
+            }
+            
+            // Если нужно стрелять и прошло достаточно времени с последнего выстрела
+            if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
+                playerShoot();
             }
         }
 
@@ -1002,6 +1203,69 @@ public class GameScreen implements Screen {
         if (ship.y < 0) ship.y = 0;
         if (ship.y > GAME_HEIGHT - SHIP_SIZE) ship.y = GAME_HEIGHT - SHIP_SIZE;
     }
+    
+    /**
+     * Игрок выполняет выстрел
+     */
+    private void playerShoot() {
+        // Создаем снаряд над кораблем игрока
+        float projectileX = ship.x + ship.width/2 - PLAYER_PROJECTILE_SIZE/2;
+        float projectileY = ship.y + ship.height;
+        
+        // Добавляем снаряд в коллекцию
+        playerProjectiles.add(new PlayerProjectile(projectileX, projectileY));
+        
+        // Запоминаем время выстрела
+        lastPlayerShootTime = TimeUtils.nanoTime();
+        
+        // Звук выстрела
+        if (game.soundManager.isSfxEnabled()) {
+            collectSound.play(0.3f);
+        }
+    }
+    
+    /**
+     * Обновляет снаряды игрока
+     */
+    private void updatePlayerProjectiles(float delta) {
+        // Если босс не активен, снаряды игрока не нужны
+        if (!bossActive) {
+            playerProjectiles.clear();
+            return;
+        }
+        
+        // Обрабатываем каждый снаряд
+        for (Iterator<PlayerProjectile> iter = playerProjectiles.iterator(); iter.hasNext();) {
+            PlayerProjectile projectile = iter.next();
+            
+            // Обновляем позицию снаряда
+            projectile.update(delta);
+            
+            // Проверяем столкновение с боссом
+            if (boss != null && projectile.bounds.overlaps(boss)) {
+                // Наносим урон боссу
+                damageBoss();
+                
+                // Удаляем снаряд при попадании
+                iter.remove();
+                
+                // Добавляем очки за попадание
+                addScore(50);
+                
+                // Воспроизводим звук попадания
+                if (game.soundManager.isSfxEnabled()) {
+                    explosionSound.play(0.3f);
+                }
+                
+                continue;
+            }
+            
+            // Удаляем снаряды за пределами экрана
+            if (projectile.isOutOfScreen()) {
+                iter.remove();
+            }
+        }
+    }
 
     private void updateAsteroids(float delta, float difficulty) {
         for (Iterator<Rectangle> iter = asteroids.iterator(); iter.hasNext(); ) {
@@ -1016,6 +1280,30 @@ public class GameScreen implements Screen {
                 score += 10; // Очки за уклонение от астероида
                 // Используем специализированный метод для уклонения
                 difficultySystem.registerDodge();
+            }
+
+            // Проверка столкновения астероида с боссом
+            if (bossActive && asteroid.y > GAME_HEIGHT / 2) {
+                if (asteroid.overlaps(boss)) {
+                    // Наносим урон боссу
+                    damageBoss();
+
+                    // Удаляем астероид
+                    iter.remove();
+
+                    // Добавляем очки за попадание
+                    score += 50;
+
+                    // Регистрируем успех
+                    difficultySystem.registerSuccess();
+
+                    // Воспроизводим звук
+                    if (game.soundManager.isSfxEnabled()) {
+                        explosionSound.play(0.3f);
+                    }
+
+                    continue; // Переходим к следующему астероиду
+                }
             }
 
             // Обработка столкновения с кораблем
@@ -1123,6 +1411,10 @@ public class GameScreen implements Screen {
         if (lives <= 0) {
             gameOver = true;
             gameMusic.stop();
+            
+            // Очищаем снаряды босса и игрока при проигрыше
+            bossProjectiles.clear();
+            playerProjectiles.clear();
 
             // Пересоздаем UI экрана проигрыша для гарантии его отображения
             if (gameOverStage != null) {
@@ -1184,6 +1476,9 @@ public class GameScreen implements Screen {
         shipImage.dispose();
         asteroidImage.dispose();
         enemyImage.dispose();
+        bossTexture.dispose();
+        bossProjectileTexture.dispose();
+        playerProjectileTexture.dispose();
         fuelImage.dispose();
         heartImage.dispose();
         backgroundImage.dispose();
@@ -1191,6 +1486,7 @@ public class GameScreen implements Screen {
         collectSound.dispose();
         explosionSound.dispose();
         gameMusic.dispose();
+        
         // Освобождаем ресурсы UI
         if (gameOverStage != null) gameOverStage.dispose();
         if (gameOverSkin != null) gameOverSkin.dispose();
@@ -1839,6 +2135,18 @@ public class GameScreen implements Screen {
                                powerup.bounds.width, powerup.bounds.height);
             }
         }
+        
+        // Отрисовка снарядов босса
+        for (BossProjectile projectile : bossProjectiles) {
+            game.batch.draw(bossProjectileTexture, projectile.bounds.x, projectile.bounds.y, 
+                           projectile.bounds.width, projectile.bounds.height);
+        }
+        
+        // Отрисовка снарядов игрока
+        for (PlayerProjectile projectile : playerProjectiles) {
+            game.batch.draw(playerProjectileTexture, projectile.bounds.x, projectile.bounds.y, 
+                           projectile.bounds.width, projectile.bounds.height);
+        }
 
         // Отрисовка эффекта щита, если он активен
         if (shieldActive) {
@@ -1851,6 +2159,9 @@ public class GameScreen implements Screen {
                             shieldSize, shieldSize);
             game.batch.setColor(1, 1, 1, 1);
         }
+
+        // Отрисовка босса и его полоски здоровья
+        drawBoss();
     }
 
     /**
@@ -1859,5 +2170,300 @@ public class GameScreen implements Screen {
     private void checkAudioSettings() {
         // Инициализация Stage для UI (только для экрана окончания игры)
         gameOverStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
+    }
+
+    /**
+     * Проверяет необходимость активации босса на основе текущего уровня
+     */
+    private void checkForBossLevel() {
+        int level = difficultySystem.getCurrentLevel();
+
+        // При переходе на новый уровень сбрасываем флаг победы над боссом предыдущего уровня
+        if (difficultySystem.hasLevelChanged() && level % 5 != 0) {
+            bossDefeated = false;
+        }
+
+        // Активируем босса каждый 5-й уровень (5, 10, 15, ...)
+        if (level % 5 == 0 && level > 0 && !bossActive && !bossDefeated) {
+            spawnBoss();
+        }
+    }
+
+    /**
+     * Создает босса
+     */
+    private void spawnBoss() {
+        // Очищаем экран от других объектов
+        asteroids.clear();
+        enemies.clear();
+        bossProjectiles.clear();
+        playerProjectiles.clear();
+
+        // Создаем босса в верхней части экрана
+        boss = new Rectangle();
+        boss.width = BOSS_SIZE;
+        boss.height = BOSS_SIZE;
+        boss.x = GAME_WIDTH / 2 - BOSS_SIZE / 2;
+        boss.y = GAME_HEIGHT - BOSS_SIZE - 50;
+
+        // Устанавливаем параметры
+        bossActive = true;
+        bossHealth = BOSS_HEALTH_MAX;
+        bossMoveDirection = 1f;
+        bossDefeated = false;
+        bossInvulnerabilityTimer = 0;
+
+        // Сохраняем время для атак босса
+        lastBossAttackTime = TimeUtils.nanoTime();
+
+        // Воспроизводим звук появления (используем существующий звук)
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play(0.7f);
+        }
+    }
+
+    /**
+     * Обновляет состояние босса
+     */
+    private void updateBoss(float delta) {
+        // Если босс не активен, выходим
+        if (!bossActive) return;
+
+        // Обновляем таймер неуязвимости
+        if (bossInvulnerabilityTimer > 0) {
+            bossInvulnerabilityTimer -= delta;
+        }
+
+        // Движение босса из стороны в сторону
+        boss.x += bossMoveDirection * BOSS_SPEED * delta;
+
+        // Изменение направления движения при достижении краев экрана
+        if (boss.x <= 0) {
+            boss.x = 0;
+            bossMoveDirection = 1;
+        } else if (boss.x >= GAME_WIDTH - BOSS_SIZE) {
+            boss.x = GAME_WIDTH - BOSS_SIZE;
+            bossMoveDirection = -1;
+        }
+
+        // Атака босса - создание астероидов и стрельба
+        if (TimeUtils.nanoTime() - lastBossAttackTime > 2000000000L) { // Каждые 2 секунды
+            // Создаем атаку астероидами
+            bossFire();
+
+            // Обновляем время последней атаки
+            lastBossAttackTime = TimeUtils.nanoTime();
+        }
+        
+        // Стрельба снарядами (отдельно от сброса астероидов)
+        if (TimeUtils.nanoTime() - lastBossAttackTime > BOSS_SHOOT_INTERVAL) {
+            // Стреляем в игрока
+            bossShoot();
+        }
+
+        // Проверка столкновения корабля с боссом
+        if (boss.overlaps(ship)) {
+            loseLife();
+            // Отталкиваем корабль
+            ship.y -= 100;
+            if (ship.y < 0) ship.y = 0;
+        }
+
+        // Если босс побежден
+        if (bossHealth <= 0 && !bossDefeated) {
+            bossDefeated = true;
+            bossActive = false;
+
+            // Очищаем все снаряды босса
+            bossProjectiles.clear();
+            playerProjectiles.clear();
+
+            // Добавляем очки за победу
+            score += 2000;
+
+            // Показываем анимацию
+            showLevelUpAnimation = true;
+            levelUpAnimationTime = 0;
+            levelUpMessage = "BOSS DEFEATED!";
+
+            // Создаем бонусы в награду
+            spawnRewardsAfterBoss();
+
+            // Воспроизводим звук
+            if (game.soundManager.isSfxEnabled()) {
+                explosionSound.play(1.0f);
+            }
+        }
+    }
+
+    /**
+     * Обрабатывает атаку по боссу
+     */
+    private void damageBoss() {
+        // Если босс неуязвим, выходим
+        if (bossInvulnerabilityTimer > 0) return;
+
+        // Наносим урон
+        bossHealth--;
+
+        // Устанавливаем период неуязвимости
+        bossInvulnerabilityTimer = 0.3f;
+
+        // Звук получения урона
+        if (game.soundManager.isSfxEnabled()) {
+            collectSound.play(0.5f);
+        }
+    }
+
+    /**
+     * Создает атаку босса
+     */
+    private void bossFire() {
+        // Создаем астероид под боссом
+        Rectangle asteroid = new Rectangle();
+        asteroid.width = ASTEROID_SIZE;
+        asteroid.height = ASTEROID_SIZE;
+        asteroid.x = boss.x + (boss.width - ASTEROID_SIZE) / 2;
+        asteroid.y = boss.y - ASTEROID_SIZE;
+
+        // Добавляем астероид
+        asteroids.add(asteroid);
+
+        // Звук атаки
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play(0.3f);
+        }
+    }
+
+    /**
+     * Создает награды после победы над боссом
+     */
+    private void spawnRewardsAfterBoss() {
+        // Создаем несколько канистр с топливом
+        for (int i = 0; i < 3; i++) {
+            Rectangle fuel = new Rectangle();
+            fuel.width = FUEL_SIZE;
+            fuel.height = FUEL_SIZE;
+            fuel.x = MathUtils.random(0, GAME_WIDTH - FUEL_SIZE);
+            fuel.y = GAME_HEIGHT - i * 100;
+            fuelCanisters.add(fuel);
+        }
+
+        // Если у игрока не максимум жизней, создаем сердечко
+        if (lives < MAX_LIVES) {
+            Rectangle heart = new Rectangle();
+            heart.width = HEART_SIZE;
+            heart.height = HEART_SIZE;
+            heart.x = GAME_WIDTH / 2 - HEART_SIZE / 2;
+            heart.y = GAME_HEIGHT;
+            hearts.add(heart);
+        }
+
+        // Создаем два случайных бонуса
+        for (int i = 0; i < 2; i++) {
+            PowerupType[] types = PowerupType.values();
+            PowerupType type = types[MathUtils.random(types.length - 1)];
+            float x = MathUtils.random(0, GAME_WIDTH - POWERUP_SIZE);
+            float y = GAME_HEIGHT - i * 120;
+            powerups.add(new Powerup(x, y, type));
+        }
+    }
+
+    /**
+     * Отрисовывает босса и его полосу здоровья
+     */
+    private void drawBoss() {
+        if (!bossActive) return;
+
+        // Определяем альфа для эффекта мигания при получении урона
+        float alpha = 1.0f;
+        if (bossInvulnerabilityTimer > 0) {
+            alpha = bossInvulnerabilityTimer % 0.2f > 0.1f ? 0.5f : 1.0f;
+        }
+
+        // Отрисовка босса с альфа
+        game.batch.setColor(1, 1, 1, alpha); // Обычный цвет для босса (не красный)
+        game.batch.draw(bossTexture, boss.x, boss.y, boss.width, boss.height);
+        game.batch.setColor(1, 1, 1, 1);
+
+        // Вычисляем процент здоровья босса
+        float healthPercentage = (float) bossHealth / BOSS_HEALTH_MAX;
+        int healthPercent = (int)(healthPercentage * 100);
+        
+        // Формируем текст для отображения
+        String healthText = "BOSS: " + healthPercent + "%";
+        
+        // Выбираем цвет в зависимости от оставшегося здоровья
+        if (healthPercent > 60) {
+            font.setColor(0.2f, 0.8f, 0.2f, 1.0f); // Зеленый для высокого здоровья
+        } else if (healthPercent > 30) {
+            font.setColor(0.8f, 0.8f, 0.2f, 1.0f); // Желтый для среднего здоровья
+        } else {
+            font.setColor(0.8f, 0.2f, 0.2f, 1.0f); // Красный для низкого здоровья
+        }
+        
+        // Измеряем ширину текста для центрирования
+        GlyphLayout layout = new GlyphLayout(font, healthText);
+        float textX = GAME_WIDTH / 2 - layout.width / 2;
+        
+        // Отрисовываем текст здоровья босса
+        font.draw(game.batch, healthText, textX, GAME_HEIGHT - 20);
+        
+        // Возвращаем цвет шрифта к белому
+        font.setColor(1, 1, 1, 1);
+    }
+
+    /**
+     * Обновляет снаряды босса
+     */
+    private void updateBossProjectiles(float delta) {
+        // Обрабатываем каждый снаряд
+        for (Iterator<BossProjectile> iter = bossProjectiles.iterator(); iter.hasNext();) {
+            BossProjectile projectile = iter.next();
+            
+            // Обновляем позицию снаряда
+            projectile.update(delta);
+            
+            // Проверяем столкновение с кораблем
+            if (projectile.bounds.overlaps(ship)) {
+                // Если нет щита, наносим урон
+                if (!shieldActive) {
+                    loseLife();
+                    difficultySystem.registerFailure(); // Регистрируем неудачу
+                }
+                
+                // Удаляем снаряд при попадании
+                iter.remove();
+                
+                // Воспроизводим звук взрыва если звуковые эффекты включены
+                if (game.soundManager.isSfxEnabled()) {
+                    explosionSound.play(0.5f);
+                }
+                
+                continue;
+            }
+            
+            // Удаляем снаряды за пределами экрана
+            if (projectile.isOutOfScreen()) {
+                iter.remove();
+            }
+        }
+    }
+
+    /**
+     * Босс стреляет снарядом в игрока
+     */
+    private void bossShoot() {
+        // Создаем снаряд под боссом
+        float projectileX = boss.x + boss.width/2 - BOSS_PROJECTILE_SIZE/2;
+        float projectileY = boss.y - BOSS_PROJECTILE_SIZE;
+        
+        // Добавляем снаряд в коллекцию
+        bossProjectiles.add(new BossProjectile(projectileX, projectileY));
+        
+        // Звук выстрела
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play(0.2f);
+        }
     }
 }
