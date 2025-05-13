@@ -138,9 +138,9 @@ public class GameScreen implements Screen {
 
     // Параметры групп объектов
     private int asteroidsInGroup = 0;
-    private int maxAsteroidsPerGroup = 1; // Увеличено с 3 до 5
+    private int maxAsteroidsPerGroup = 4; // Увеличено с 3 до 4
     private int enemiesInGroup = 0;
-    private int maxEnemiesPerGroup = 1; // Увеличено с 2 до 3
+    private int maxEnemiesPerGroup = 2; // Увеличено до 2
 
     // Анимация нового уровня
     private boolean showLevelUpAnimation;
