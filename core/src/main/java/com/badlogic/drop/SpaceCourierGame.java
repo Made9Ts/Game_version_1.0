@@ -17,37 +17,29 @@ public class SpaceCourierGame extends Game {
 	public static final float GAME_WIDTH = 720; // Виртуальная ширина (половина реального разрешения для производительности)
 	public static final float GAME_HEIGHT = 1560; // Виртуальная высота с сохранением пропорций
 	
-	// Основной SpriteBatch для отрисовки всех объектов
+	// Менеджеры ресурсов и систем
 	public SpriteBatch batch;
-	
-	// Атлас текстур (для оптимизации производительности)
-	private TextureAtlas gameAtlas;
-	
-	// Менеджер шрифтов для улучшенного качества текста
 	public FontManager fontManager;
-	
-	// Система достижений
 	public AchievementSystem achievementSystem;
-    
-    // Менеджер настроек звука
-    public SoundManager soundManager;
+	public SoundManager soundManager;
+	
+	// Ресурсы для оптимизации производительности
+	private TextureAtlas gameAtlas;
 
 	@Override
 	public void create() {
-		// Инициализация основных компонентов
-		batch = new SpriteBatch();
-		
-		// Создаем менеджер шрифтов для высокого качества текста
-		fontManager = new FontManager();
-		
-		// Создаем систему достижений
-		achievementSystem = new AchievementSystem();
-        
-        // Создаем менеджер настроек звука
-        soundManager = new SoundManager();
-		
-		// Загрузка экрана меню
+		initializeResources();
 		setScreen(new MainMenuScreen(this));
+	}
+	
+	/**
+	 * Инициализирует все необходимые ресурсы и системы игры
+	 */
+	private void initializeResources() {
+		batch = new SpriteBatch();
+		fontManager = new FontManager();
+		achievementSystem = new AchievementSystem();
+		soundManager = new SoundManager();
 	}
 
 	@Override
@@ -67,29 +59,31 @@ public class SpaceCourierGame extends Game {
 	 * Используется для решения проблем с сохранением состояний шрифтов
 	 */
 	public void recreateFontManager() {
-		// Сначала освобождаем ресурсы текущего менеджера шрифтов
 		if (fontManager != null) {
 			fontManager.dispose();
 		}
-		
-		// Создаем новый менеджер шрифтов
 		fontManager = new FontManager();
 	}
 
 	@Override
 	public void dispose() {
-		// Освобождаем ресурсы
-		batch.dispose();
-		if (gameAtlas != null) {
-			gameAtlas.dispose();
-		}
-		
-		// Освобождаем ресурсы шрифтов
-		if (fontManager != null) {
-			fontManager.dispose();
-		}
-		
-		// Освобождаем ресурсы текущего экрана
+		disposeResources();
+		disposeCurrentScreen();
+	}
+	
+	/**
+	 * Освобождает все ресурсы, используемые игрой
+	 */
+	private void disposeResources() {
+		if (batch != null) batch.dispose();
+		if (gameAtlas != null) gameAtlas.dispose();
+		if (fontManager != null) fontManager.dispose();
+	}
+	
+	/**
+	 * Освобождает ресурсы текущего экрана
+	 */
+	private void disposeCurrentScreen() {
 		if (getScreen() != null) {
 			getScreen().dispose();
 		}
