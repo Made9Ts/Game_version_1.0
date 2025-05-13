@@ -52,6 +52,7 @@ public class GameScreen implements Screen {
     private Texture fuelImage;
     private Texture heartImage; // Текстура сердечка
     private Texture backgroundImage;
+    private Texture pauseButtonTexture;
 
     // Звуки и музыка
     private Sound collectSound;
@@ -146,12 +147,20 @@ public class GameScreen implements Screen {
     private TextButton restartButton;
     private TextButton menuButton;
     private TextButton scoreLabel; // Добавляем переменную для отображения счета
+    
+    // UI для экрана паузы
+    private Stage pauseStage;
+    private Skin pauseSkin;
+    private TextButton continueButton;
+    private TextButton pauseMenuButton;
+    private boolean isPaused;
+    private Rectangle pauseButtonRect;
 
     // Константы
     private static final int SHIP_SPEED = 500; // Увеличенная скорость для больших экранов
     private static final float SPEED_BOOST_MULTIPLIER = 1.5f; // Множитель скорости для бонуса
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 1.2f; // Уменьшенный расход для лучшего баланса геймплея
+    private static final float FUEL_CONSUMPTION = 2.4f; // Увеличенный расход топлива (в 2 раза больше)
 
     // Размеры игровых объектов для больших экранов
     private static final int SHIP_SIZE = 96;
@@ -193,6 +202,15 @@ public class GameScreen implements Screen {
         backgroundImage = new Texture("background.png");
         backgroundImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         
+        // Загружаем текстуру кнопки паузы
+        pauseButtonTexture = new Texture("pause_button.png");
+        pauseButtonTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        
+        // Инициализация области кнопки паузы
+        float pauseButtonSize = 60;
+        pauseButtonRect = new Rectangle(GAME_WIDTH - pauseButtonSize - 20, GAME_HEIGHT - pauseButtonSize - 20, 
+                                       pauseButtonSize, pauseButtonSize);
+        
         // Загружаем текстуры бонусов
         shieldTexture = new Texture("shield.png");
         shieldTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
@@ -213,7 +231,13 @@ public class GameScreen implements Screen {
 
         // Настройка музыки
         gameMusic.setLooping(true);
-        gameMusic.play();
+        
+        // Проверяем настройки звука
+        if (game.soundManager.isMusicEnabled()) {
+            gameMusic.play();
+        } else {
+            gameMusic.stop();
+        }
 
         // Создание и настройка системы сложности
         difficultySystem = new DifficultySystem();
@@ -223,17 +247,25 @@ public class GameScreen implements Screen {
         
         // Создаем UI для экрана проигрыша
         createGameOverUI();
+        
+        // Инициализация сцены для экрана паузы
+        pauseStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
+        
+        // Создаем UI для экрана паузы
+        createPauseUI();
+        
+        // Инициализируем переменную паузы
+        isPaused = false;
 
         // Инициализация игровых объектов
         initGame();
     }
 
     private void initGame() {
-        // Создание корабля игрока (внизу экрана в вертикальной ориентации)
-        // Поднимаем корабль выше от нижнего края для лучшей видимости и игрового комфорта
+        // Создание корабля игрока (в центре экрана)
         ship = new Rectangle();
         ship.x = GAME_WIDTH / 2 - SHIP_SIZE / 2;
-        ship.y = 325; // Поднимаем ещё выше (было 250, теперь +75)
+        ship.y = GAME_HEIGHT / 2 - SHIP_SIZE / 2; // Помещаем корабль в центр экрана
         ship.width = SHIP_SIZE;
         ship.height = SHIP_SIZE;
 
@@ -250,6 +282,7 @@ public class GameScreen implements Screen {
         fuel = MAX_FUEL;
         gameOver = false;
         needHeart = false; // Изначально сердечки не нужны, так как жизни полные
+        isPaused = false; // Сбрасываем состояние паузы
         
         // Сбрасываем счетчики групп
         asteroidsInGroup = 0;
@@ -332,9 +365,16 @@ public class GameScreen implements Screen {
         camera.update();
         game.batch.setProjectionMatrix(camera.combined);
         
-        // Обработка игровой логики, если игра не окончена
-        if (!gameOver) {
+        // Обработка игровой логики, если игра не окончена и не на паузе
+        if (!gameOver && !isPaused) {
             updateGame(delta);
+        }
+        
+        // Проверяем настройки звука для музыки
+        if (!gameOver && !isPaused && game.soundManager.isMusicEnabled() && !gameMusic.isPlaying()) {
+            gameMusic.play();
+        } else if ((!game.soundManager.isMusicEnabled() || isPaused || gameOver) && gameMusic.isPlaying()) {
+            gameMusic.pause();
         }
 
         // Начало отрисовки
@@ -401,6 +441,37 @@ public class GameScreen implements Screen {
             // Отображение уведомления о достижении, если оно активно
             if (achievementNotificationActive) {
                 drawAchievementNotification(delta);
+            }
+            
+            // Отрисовка кнопки паузы
+            game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y, 
+                         pauseButtonRect.width, pauseButtonRect.height);
+            
+            // Обработка нажатия на кнопку паузы
+            if (Gdx.input.justTouched() && !isPaused) {
+                Vector3 touchPos = new Vector3();
+                touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+                camera.unproject(touchPos);
+                
+                // Проверка нажатия на кнопку паузы
+                if (pauseButtonRect.contains(touchPos.x, touchPos.y)) {
+                    // Ставим игру на паузу
+                    isPaused = true;
+                    
+                    // Останавливаем музыку
+                    gameMusic.pause();
+                    
+                    // Устанавливаем обработчик ввода на экран паузы
+                    Gdx.input.setInputProcessor(pauseStage);
+                }
+            }
+            
+            // Если игра на паузе, отображаем экран паузы
+            if (isPaused) {
+                game.batch.end();
+                pauseStage.act(delta);
+                pauseStage.draw();
+                return; // Выходим из функции, чтобы избежать повторного вызова batch.end()
             }
         } else {
             // Если игра окончена или установлен флаг принудительной отрисовки
@@ -634,8 +705,8 @@ public class GameScreen implements Screen {
             }
         }
 
-        // Топливо появляется очень редко (интервал увеличен до 6000000000 наносекунд - в 3 раза реже)
-        if (TimeUtils.nanoTime() - lastFuelTime > 6000000000L) {
+        // Топливо появляется очень редко (интервал увеличен в 1.5 раза)
+        if (TimeUtils.nanoTime() - lastFuelTime > 9000000000L) {
             spawnFuelCanister();
         }
         
@@ -658,6 +729,28 @@ public class GameScreen implements Screen {
     }
     
     private void handleInput(float delta) {
+        // Обработка клавиши Escape для паузы
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
+            if (isPaused) {
+                // Если уже на паузе, снимаем паузу
+                isPaused = false;
+                // Возвращаем обработку ввода к игре
+                Gdx.input.setInputProcessor(null);
+                // Возобновляем музыку
+                if (!gameMusic.isPlaying() && game.soundManager.isMusicEnabled()) {
+                    gameMusic.play();
+                }
+            } else {
+                // Ставим игру на паузу
+                isPaused = true;
+                // Останавливаем музыку
+                gameMusic.pause();
+                // Устанавливаем обработчик ввода на экран паузы
+                Gdx.input.setInputProcessor(pauseStage);
+            }
+            return; // Выходим из метода, чтобы не обрабатывать другие клавиши
+        }
+        
         // Обработка сенсорного ввода (однопальцевый тач)
         if (Gdx.input.isTouched()) {
             Vector3 touchPos = new Vector3();
@@ -666,9 +759,10 @@ public class GameScreen implements Screen {
             
             // Улучшенное управление: постепенное движение к позиции касания для плавности
             float targetX = touchPos.x - SHIP_SIZE / 2;
+            float targetY = touchPos.y - SHIP_SIZE / 2;
             float moveStep = SHIP_SPEED * 1.5f * delta; // Увеличиваем скорость реакции
             
-            // Двигаемся плавно к точке касания
+            // Двигаемся плавно к точке касания по X
             if (Math.abs(ship.x - targetX) <= moveStep) {
                 ship.x = targetX; // Если уже близко, просто устанавливаем позицию
             } else if (ship.x < targetX) {
@@ -676,15 +770,49 @@ public class GameScreen implements Screen {
             } else {
                 ship.x -= moveStep;
             }
+            
+            // Двигаемся плавно к точке касания по Y
+            if (Math.abs(ship.y - targetY) <= moveStep) {
+                ship.y = targetY; // Если уже близко, просто устанавливаем позицию
+            } else if (ship.y < targetY) {
+                ship.y += moveStep;
+            } else {
+                ship.y -= moveStep;
+            }
+        } else {
+            // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
+            float moveX = 0;
+            float moveY = 0;
+            
+            // Определяем направление движения по осям X и Y
+            if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1;
+            
+            // Если движемся по диагонали, нормализуем скорость
+            if (moveX != 0 && moveY != 0) {
+                // Нормализация для диагонального движения (чтобы суммарная скорость не превышала SHIP_SPEED)
+                float length = (float) Math.sqrt(moveX * moveX + moveY * moveY);
+                moveX /= length;
+                moveY /= length;
+            }
+            
+            // Применяем множитель скорости, если активен соответствующий бонус
+            float actualSpeed = speedBoostActive ? SHIP_SPEED * SPEED_BOOST_MULTIPLIER : SHIP_SPEED;
+            
+            // Перемещаем корабль
+            ship.x += moveX * actualSpeed * delta;
+            ship.y += moveY * actualSpeed * delta;
         }
 
-        // Обработка клавиатуры
-        if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) ship.x -= SHIP_SPEED * delta;
-        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) ship.x += SHIP_SPEED * delta;
-
-        // Ограничения положения корабля
+        // Ограничения положения корабля по X
         if (ship.x < 0) ship.x = 0;
         if (ship.x > GAME_WIDTH - SHIP_SIZE) ship.x = GAME_WIDTH - SHIP_SIZE;
+        
+        // Ограничения положения корабля по Y
+        if (ship.y < 0) ship.y = 0;
+        if (ship.y > GAME_HEIGHT - SHIP_SIZE) ship.y = GAME_HEIGHT - SHIP_SIZE;
     }
 
     private void updateAsteroids(float delta, float difficulty) {
@@ -731,7 +859,9 @@ public class GameScreen implements Screen {
             
             // Обработка столкновения с кораблем
             if (enemy.overlaps(ship)) {
-                explosionSound.play();
+                if (game.soundManager.isSfxEnabled()) {
+                    explosionSound.play();
+                }
                 iter.remove();
                 loseLife();
                 difficultySystem.registerFailure(); // Регистрируем неудачу
@@ -773,7 +903,11 @@ public class GameScreen implements Screen {
             
             // Обработка сбора сердечка
             if (heart.overlaps(ship)) {
-                collectSound.play(); // Используем тот же звук, что и для топлива
+                // Воспроизводим звук сбора если звуковые эффекты включены
+                if (game.soundManager.isSfxEnabled()) {
+                    collectSound.play();
+                }
+                
                 iter.remove();
                 if (lives < 3) { // Проверка, что не превышаем максимум жизней
                     lives++;
@@ -792,6 +926,11 @@ public class GameScreen implements Screen {
         
         // Отмечаем, что игрок получил урон (для достижения "Неуязвимый")
         damageTaken = true;
+        
+        // Воспроизводим звук взрыва если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play();
+        }
         
         if (lives <= 0) {
             gameOver = true;
@@ -860,12 +999,15 @@ public class GameScreen implements Screen {
         fuelImage.dispose();
         heartImage.dispose();
         backgroundImage.dispose();
+        pauseButtonTexture.dispose();
         collectSound.dispose();
         explosionSound.dispose();
         gameMusic.dispose();
         // Освобождаем ресурсы UI
         if (gameOverStage != null) gameOverStage.dispose();
         if (gameOverSkin != null) gameOverSkin.dispose();
+        if (pauseStage != null) pauseStage.dispose();
+        if (pauseSkin != null) pauseSkin.dispose();
         // Не освобождаем font, т.к. это делает FontManager
         
         // Освобождаем текстуры бонусов
@@ -1111,8 +1253,10 @@ public class GameScreen implements Screen {
         // Удаляем астероид в любом случае
         asteroids.removeValue(asteroid, true);
         
-        // Воспроизводим звук взрыва
-        explosionSound.play();
+        // Воспроизводим звук взрыва если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play();
+        }
     }
     
     // Обработка сбора топлива
@@ -1129,8 +1273,10 @@ public class GameScreen implements Screen {
         // Сообщаем системе сложности об успехе - используем новый метод
         difficultySystem.registerFuelCollection();
         
-        // Воспроизводим звук сбора
-        collectSound.play();
+        // Воспроизводим звук сбора если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            collectSound.play();
+        }
         
         // Увеличиваем счетчик собранного топлива для достижения
         fuelCollected++;
@@ -1249,5 +1395,140 @@ public class GameScreen implements Screen {
         // Сбрасываем цвет
         notificationFont.setColor(1, 1, 1, 1);
         game.batch.setColor(1, 1, 1, 1);
+    }
+
+    /**
+     * Создает пользовательский интерфейс для экрана паузы
+     */
+    private void createPauseUI() {
+        // Создаем скин для кнопок
+        pauseSkin = new Skin();
+        
+        // Используем шрифты из FontManager
+        BitmapFont titleFont = game.fontManager.getTitleFont();
+        BitmapFont gameFont = game.fontManager.getGameFont();
+        
+        // Все шрифты устанавливаем в белый цвет
+        titleFont.setColor(Color.WHITE);
+        gameFont.setColor(Color.WHITE);
+        
+        pauseSkin.add("title-font", titleFont);
+        pauseSkin.add("game-font", gameFont);
+        
+        pauseSkin.add("white", new Color(1, 1, 1, 1));
+        pauseSkin.add("gray", new Color(0.5f, 0.5f, 0.5f, 1));
+        pauseSkin.add("blue", new Color(0.2f, 0.4f, 0.8f, 1));
+        pauseSkin.add("black", new Color(0, 0, 0, 1));
+        pauseSkin.add("transparent", new Color(0, 0, 0, 0.7f));
+        
+        // Добавляем белый пиксель для фона кнопок и панелей
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.WHITE);
+        pixmap.fill();
+        pauseSkin.add("white-pixel", new Texture(pixmap));
+        pixmap.dispose();
+        
+        // Стиль для кнопок
+        TextButtonStyle buttonStyle = new TextButtonStyle();
+        buttonStyle.font = pauseSkin.getFont("game-font");
+        // Гарантируем, что цвет текста остается белым для всех состояний кнопки
+        buttonStyle.fontColor = new Color(1, 1, 1, 1);
+        buttonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
+        buttonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
+        buttonStyle.disabledFontColor = pauseSkin.getColor("gray");
+        
+        // Добавляем фоны для кнопок - как в главном меню
+        buttonStyle.up = pauseSkin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
+        buttonStyle.down = pauseSkin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
+        buttonStyle.over = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
+        
+        pauseSkin.add("default", buttonStyle);
+        
+        // Стиль для заголовка
+        TextButtonStyle titleStyle = new TextButtonStyle();
+        titleStyle.font = pauseSkin.getFont("title-font");
+        titleStyle.fontColor = pauseSkin.getColor("white");
+        
+        pauseSkin.add("title", titleStyle);
+        
+        // Создаем таблицу для размещения UI элементов
+        Table pauseTable = new Table();
+        pauseTable.setFillParent(true);
+        pauseTable.center();
+        
+        // Добавляем полупрозрачный фон для всего экрана паузы
+        Table background = new Table();
+        background.setFillParent(true);
+        background.setBackground(pauseSkin.newDrawable("white-pixel", new Color(0, 0, 0, 0.6f)));
+        pauseStage.addActor(background);
+        
+        // Создаем заголовок паузы
+        TextButton pauseTitle = new TextButton("ПАУЗА", titleStyle);
+        pauseTitle.getLabel().setFontScale(1.5f); // Увеличиваем размер текста заголовка
+        pauseTitle.setDisabled(true);
+        
+        // Создаем кнопки и настраиваем размер шрифта
+        continueButton = new TextButton("ПРОДОЛЖИТЬ", buttonStyle);
+        continueButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
+        
+        pauseMenuButton = new TextButton("ГЛАВНОЕ МЕНЮ", buttonStyle);
+        pauseMenuButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
+        
+        // Добавляем заголовок
+        pauseTable.add(pauseTitle).padBottom(60).row();
+        
+        // Настраиваем размеры кнопок и добавляем их в таблицу
+        pauseTable.add(continueButton).width(450).height(120).pad(20).row();
+        pauseTable.add(pauseMenuButton).width(450).height(120).pad(20).row();
+        
+        // Добавляем обработчики событий на кнопки
+        continueButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                // Возобновляем игру
+                isPaused = false;
+                
+                // Возвращаем обработку ввода к игре
+                Gdx.input.setInputProcessor(null);
+                
+                // Возобновляем музыку, если она остановлена
+                if (!gameMusic.isPlaying()) {
+                    gameMusic.play();
+                }
+            }
+        });
+        
+        pauseMenuButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                // Сначала останавливаем все звуки и музыку
+                if (gameMusic.isPlaying()) {
+                    gameMusic.stop();
+                }
+                
+                // Освобождаем ресурсы UI
+                if (pauseStage != null) {
+                    pauseStage.dispose();
+                    pauseStage = null;
+                }
+                
+                if (pauseSkin != null) {
+                    pauseSkin.dispose();
+                    pauseSkin = null;
+                }
+                
+                // Пересоздаем менеджер шрифтов
+                game.recreateFontManager();
+                
+                // Освобождаем ресурсы текущего экрана
+                dispose();
+                
+                // Переходим в главное меню
+                game.setScreen(new MainMenuScreen(game));
+            }
+        });
+        
+        // Добавляем таблицу на сцену
+        pauseStage.addActor(pauseTable);
     }
 }

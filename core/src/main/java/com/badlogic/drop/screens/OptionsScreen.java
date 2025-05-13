@@ -5,28 +5,34 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox.CheckBoxStyle;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
-import com.badlogic.gdx.graphics.Pixmap;
 
 /**
- * Экран главного меню игры, адаптированный для Samsung Galaxy S24 Ultra
+ * Экран настроек игры
  */
-public class MainMenuScreen implements Screen {
+public class OptionsScreen implements Screen {
     // Константы для вертикальной ориентации, адаптированные для S24 Ultra
-    // Используем виртуальное разрешение, которое будет масштабироваться
-    private static final float GAME_WIDTH = 720; // Половина ширины S24 Ultra для улучшения производительности
-    private static final float GAME_HEIGHT = 1560; // Масштабированная высота с сохранением пропорций
+    private static final float GAME_WIDTH = 720;
+    private static final float GAME_HEIGHT = 1560;
     
     private final SpaceCourierGame game;
     private OrthographicCamera camera;
@@ -34,8 +40,12 @@ public class MainMenuScreen implements Screen {
     private Skin skin;
     private Texture backgroundImage;
     private GlyphLayout titleLayout;
+    
+    // UI элементы для настроек звука
+    private CheckBox musicCheckbox;
+    private CheckBox sfxCheckbox;
 
-    public MainMenuScreen(final SpaceCourierGame game) {
+    public OptionsScreen(final SpaceCourierGame game) {
         this.game = game;
 
         // Сбрасываем цвета всех шрифтов при создании экрана
@@ -55,7 +65,7 @@ public class MainMenuScreen implements Screen {
         
         // Устанавливаем размер текста заголовка
         titleLayout = new GlyphLayout();
-        titleLayout.setText(game.fontManager.getTitleFont(), "SPACE COURIER");
+        titleLayout.setText(game.fontManager.getTitleFont(), "НАСТРОЙКИ");
         
         // Создаем скин для UI вручную
         createSkin();
@@ -66,7 +76,7 @@ public class MainMenuScreen implements Screen {
     private void createSkin() {
         skin = new Skin();
         
-        // Добавляем шрифт в скин из FontManager
+        // Добавляем шрифты в скин из FontManager
         BitmapFont uiFont = game.fontManager.getUIFont();
         // Явно устанавливаем белый цвет для шрифта
         uiFont.setColor(Color.WHITE);
@@ -83,9 +93,25 @@ public class MainMenuScreen implements Screen {
         pixmap.setColor(Color.WHITE);
         pixmap.fill();
         skin.add("white-pixel", new Texture(pixmap));
-        pixmap.dispose();
         
-        // Создаем стиль кнопки с улучшенным визуальным стилем
+        // Создаем пиксель для чекбокса
+        Pixmap checkboxPixmap = new Pixmap(24, 24, Pixmap.Format.RGBA8888);
+        checkboxPixmap.setColor(Color.WHITE);
+        checkboxPixmap.fill();
+        Texture checkboxTexture = new Texture(checkboxPixmap);
+        skin.add("checkbox", checkboxTexture);
+        
+        Pixmap checkboxCheckedPixmap = new Pixmap(24, 24, Pixmap.Format.RGBA8888);
+        checkboxCheckedPixmap.setColor(Color.BLUE);
+        checkboxCheckedPixmap.fill();
+        Texture checkboxCheckedTexture = new Texture(checkboxCheckedPixmap);
+        skin.add("checkbox-checked", checkboxCheckedTexture);
+        
+        pixmap.dispose();
+        checkboxPixmap.dispose();
+        checkboxCheckedPixmap.dispose();
+        
+        // Создаем стиль кнопки
         TextButtonStyle textButtonStyle = new TextButtonStyle();
         textButtonStyle.font = skin.getFont("default-font");
         // Гарантируем, что цвет текста остается белым для всех состояний кнопки
@@ -101,6 +127,20 @@ public class MainMenuScreen implements Screen {
         
         // Добавляем стиль в скин
         skin.add("default", textButtonStyle);
+        
+        // Создаем стиль метки
+        LabelStyle labelStyle = new LabelStyle();
+        labelStyle.font = skin.getFont("default-font");
+        labelStyle.fontColor = skin.getColor("white");
+        skin.add("default", labelStyle);
+        
+        // Создаем стиль чекбокса
+        CheckBoxStyle checkBoxStyle = new CheckBoxStyle();
+        checkBoxStyle.checkboxOn = skin.newDrawable("checkbox-checked");
+        checkBoxStyle.checkboxOff = skin.newDrawable("checkbox");
+        checkBoxStyle.font = skin.getFont("default-font");
+        checkBoxStyle.fontColor = skin.getColor("white");
+        skin.add("default", checkBoxStyle);
     }
     
     private void createUI() {
@@ -109,55 +149,57 @@ public class MainMenuScreen implements Screen {
         table.setFillParent(true);
         table.center();
         
-        // Создаем кнопки (используем латиницу)
-        TextButton playButton = new TextButton("PLAY", skin);
-        TextButton achievementsButton = new TextButton("ACHIEVEMENTS", skin);
-        TextButton optionsButton = new TextButton("OPTIONS", skin);
-        TextButton exitButton = new TextButton("EXIT", skin);
+        // Создаем кнопку возврата в главное меню
+        TextButton backButton = new TextButton("НАЗАД", skin);
         
-        // Добавляем отступ сверху для заголовка (увеличен для больших экранов)
-        table.add().height(400);
+        // Создаем чекбоксы для настроек звука
+        musicCheckbox = new CheckBox(" МУЗЫКА", skin);
+        sfxCheckbox = new CheckBox(" SFX-ЗВУКИ", skin);
+        
+        // Устанавливаем начальные значения чекбоксов
+        musicCheckbox.setChecked(game.soundManager.isMusicEnabled());
+        sfxCheckbox.setChecked(game.soundManager.isSfxEnabled());
+        
+        // Добавляем отступ сверху для заголовка
+        table.add().height(300);
         table.row();
         
-        // Настраиваем размеры кнопок и добавляем их в таблицу (увеличены для больших экранов)
-        table.add(playButton).width(450).height(120).pad(20);
+        // Добавляем чекбоксы с отступами
+        table.add(musicCheckbox).width(400).height(80).pad(20).left();
         table.row();
-        table.add(achievementsButton).width(450).height(120).pad(20);
+        table.add(sfxCheckbox).width(400).height(80).pad(20).left();
         table.row();
-        table.add(optionsButton).width(450).height(120).pad(20);
-        table.row();
-        table.add(exitButton).width(450).height(120).pad(20);
         
-        // Добавляем обработчики событий на кнопки
-        playButton.addListener(new ClickListener() {
+        // Добавляем отступ перед кнопкой возврата
+        table.add().height(100);
+        table.row();
+        
+        // Добавляем кнопку возврата
+        table.add(backButton).width(450).height(120).pad(20);
+        
+        // Добавляем обработчики событий на чекбоксы
+        musicCheckbox.addListener(new ChangeListener() {
             @Override
-            public void clicked(InputEvent event, float x, float y) {
-                game.setScreen(new GameScreen(game));
-                dispose();
+            public void changed(ChangeEvent event, Actor actor) {
+                boolean enabled = musicCheckbox.isChecked();
+                game.soundManager.setMusicEnabled(enabled);
             }
         });
         
-        achievementsButton.addListener(new ClickListener() {
+        sfxCheckbox.addListener(new ChangeListener() {
             @Override
-            public void clicked(InputEvent event, float x, float y) {
-                game.setScreen(new AchievementsScreen(game, game.achievementSystem));
-                dispose();
+            public void changed(ChangeEvent event, Actor actor) {
+                boolean enabled = sfxCheckbox.isChecked();
+                game.soundManager.setSfxEnabled(enabled);
             }
         });
         
-        optionsButton.addListener(new ClickListener() {
+        // Добавляем обработчик события на кнопку возврата
+        backButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                // Переход к экрану настроек
-                game.setScreen(new OptionsScreen(game));
+                game.setScreen(new MainMenuScreen(game));
                 dispose();
-            }
-        });
-        
-        exitButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                Gdx.app.exit();
             }
         });
         
@@ -167,7 +209,7 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        // Очищаем экран с более глубоким цветом для улучшения визуального эффекта
+        // Очищаем экран
         ScreenUtils.clear(0.05f, 0.05f, 0.2f, 1);
         
         // Обновляем камеру
@@ -179,10 +221,10 @@ public class MainMenuScreen implements Screen {
         // Растягиваем фон на весь экран в вертикальной ориентации
         game.batch.draw(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
         
-        // Рисуем заголовок с улучшенным качеством через FontManager
+        // Рисуем заголовок
         game.fontManager.getTitleFont().draw(
             game.batch,
-            "SPACE COURIER",
+            "НАСТРОЙКИ",
             GAME_WIDTH / 2 - titleLayout.width / 2,
             GAME_HEIGHT - 150
         );
@@ -195,45 +237,38 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void resize(int width, int height) {
-        // Обеспечиваем корректное масштабирование для всех типов экранов
         stage.getViewport().update(width, height, true);
     }
 
     @Override
     public void show() {
-        // Метод вызывается, когда этот экран становится текущим
         Gdx.input.setInputProcessor(stage);
     }
 
     @Override
     public void hide() {
-        // Метод вызывается, когда этот экран перестает быть текущим
         Gdx.input.setInputProcessor(null);
     }
 
     @Override
     public void pause() {
-        // Вызывается при остановке игры, например, когда пользователь переключается на другое приложение
+        // Метод вызывается при остановке игры
     }
 
     @Override
     public void resume() {
-        // Вызывается при возобновлении игры
+        // Метод вызывается при возобновлении игры
     }
 
     @Override
     public void dispose() {
-        // Освобождаем ресурсы
         stage.dispose();
         backgroundImage.dispose();
         
         if (skin != null) {
-            // Перед освобождением скина, удаляем из него шрифты, чтобы они не были удалены
+            // Перед освобождением скина, удаляем из него шрифты
             skin.remove("default-font", BitmapFont.class);
             skin.dispose();
         }
-        
-        // Не требуется вручную освобождать шрифты, так как их освободит FontManager
-        // при закрытии приложения
     }
 } 

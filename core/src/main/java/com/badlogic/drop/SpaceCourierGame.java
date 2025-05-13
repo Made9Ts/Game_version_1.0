@@ -3,6 +3,7 @@ package com.badlogic.drop;
 import com.badlogic.drop.screens.MainMenuScreen;
 import com.badlogic.drop.systems.AchievementSystem;
 import com.badlogic.drop.util.FontManager;
+import com.badlogic.drop.util.SoundManager;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
@@ -27,6 +28,9 @@ public class SpaceCourierGame extends Game {
 	
 	// Система достижений
 	public AchievementSystem achievementSystem;
+    
+    // Менеджер настроек звука
+    public SoundManager soundManager;
 
 	@Override
 	public void create() {
@@ -38,6 +42,9 @@ public class SpaceCourierGame extends Game {
 		
 		// Создаем систему достижений
 		achievementSystem = new AchievementSystem();
+        
+        // Создаем менеджер настроек звука
+        soundManager = new SoundManager();
 		
 		// Загрузка экрана меню
 		setScreen(new MainMenuScreen(this));
