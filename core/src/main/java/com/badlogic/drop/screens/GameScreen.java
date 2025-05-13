@@ -231,7 +231,13 @@ public class GameScreen implements Screen {
 
         // Настройка музыки
         gameMusic.setLooping(true);
-        gameMusic.play();
+        
+        // Проверяем настройки звука
+        if (game.soundManager.isMusicEnabled()) {
+            gameMusic.play();
+        } else {
+            gameMusic.stop();
+        }
 
         // Создание и настройка системы сложности
         difficultySystem = new DifficultySystem();
@@ -362,6 +368,13 @@ public class GameScreen implements Screen {
         // Обработка игровой логики, если игра не окончена и не на паузе
         if (!gameOver && !isPaused) {
             updateGame(delta);
+        }
+        
+        // Проверяем настройки звука для музыки
+        if (!gameOver && !isPaused && game.soundManager.isMusicEnabled() && !gameMusic.isPlaying()) {
+            gameMusic.play();
+        } else if ((!game.soundManager.isMusicEnabled() || isPaused || gameOver) && gameMusic.isPlaying()) {
+            gameMusic.pause();
         }
 
         // Начало отрисовки
@@ -724,7 +737,7 @@ public class GameScreen implements Screen {
                 // Возвращаем обработку ввода к игре
                 Gdx.input.setInputProcessor(null);
                 // Возобновляем музыку
-                if (!gameMusic.isPlaying()) {
+                if (!gameMusic.isPlaying() && game.soundManager.isMusicEnabled()) {
                     gameMusic.play();
                 }
             } else {
@@ -846,7 +859,9 @@ public class GameScreen implements Screen {
             
             // Обработка столкновения с кораблем
             if (enemy.overlaps(ship)) {
-                explosionSound.play();
+                if (game.soundManager.isSfxEnabled()) {
+                    explosionSound.play();
+                }
                 iter.remove();
                 loseLife();
                 difficultySystem.registerFailure(); // Регистрируем неудачу
@@ -888,7 +903,11 @@ public class GameScreen implements Screen {
             
             // Обработка сбора сердечка
             if (heart.overlaps(ship)) {
-                collectSound.play(); // Используем тот же звук, что и для топлива
+                // Воспроизводим звук сбора если звуковые эффекты включены
+                if (game.soundManager.isSfxEnabled()) {
+                    collectSound.play();
+                }
+                
                 iter.remove();
                 if (lives < 3) { // Проверка, что не превышаем максимум жизней
                     lives++;
@@ -907,6 +926,11 @@ public class GameScreen implements Screen {
         
         // Отмечаем, что игрок получил урон (для достижения "Неуязвимый")
         damageTaken = true;
+        
+        // Воспроизводим звук взрыва если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play();
+        }
         
         if (lives <= 0) {
             gameOver = true;
@@ -1229,8 +1253,10 @@ public class GameScreen implements Screen {
         // Удаляем астероид в любом случае
         asteroids.removeValue(asteroid, true);
         
-        // Воспроизводим звук взрыва
-        explosionSound.play();
+        // Воспроизводим звук взрыва если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            explosionSound.play();
+        }
     }
     
     // Обработка сбора топлива
@@ -1247,8 +1273,10 @@ public class GameScreen implements Screen {
         // Сообщаем системе сложности об успехе - используем новый метод
         difficultySystem.registerFuelCollection();
         
-        // Воспроизводим звук сбора
-        collectSound.play();
+        // Воспроизводим звук сбора если звуковые эффекты включены
+        if (game.soundManager.isSfxEnabled()) {
+            collectSound.play();
+        }
         
         // Увеличиваем счетчик собранного топлива для достижения
         fuelCollected++;
