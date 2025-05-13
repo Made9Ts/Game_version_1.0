@@ -55,7 +55,7 @@ public class GameScreen implements Screen {
     private static final int SHIP_SPEED = 500;
     private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 5.0f; // Увеличено с 2.4f до 2.8f для Ыболее быстрого расхода
+    private static final float FUEL_CONSUMPTION = 2.5f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
     private static final int MAX_LIVES = 3;
     private static final float PLAYER_PROJECTILE_SPEED = 400f; // Скорость снаряда игрока
     private static final long PLAYER_SHOOT_COOLDOWN = 500000000L; // Задержка между выстрелами игрока (0.5 сек)
@@ -2503,30 +2503,30 @@ public class GameScreen implements Screen {
     private void drawLowFuelWarning(float delta) {
         // Обновляем таймер предупреждения
         lowFuelWarningTime += delta;
-        
+
         // Проверяем, завершилось ли отображение предупреждения
         if (lowFuelWarningTime >= LOW_FUEL_WARNING_DURATION) {
             lowFuelWarningActive = false;
             return;
         }
-        
+
         // Расчет пульсирующей прозрачности для привлечения внимания
         float blinkValue = (float)Math.sin(lowFuelWarningTime * 10) * 0.3f + 0.7f;
-        
+
         // Вычисляем размеры оповещения относительно экрана с отступами
         float warningHeight = GAME_HEIGHT * 0.09f; // 9% от высоты экрана (уменьшено с 10%)
         float warningWidth = GAME_WIDTH * 0.7f; // 70% от ширины экрана
         float warningY = GAME_HEIGHT * 0.18f; // 18% от нижней части экрана (увеличено с 15%)
         float warningX = (GAME_WIDTH - warningWidth) / 2; // центрирование по горизонтали
-        
+
         // Отрисовка черного полупрозрачного фона
         game.batch.setColor(0, 0, 0, blinkValue * 0.8f);
         game.batch.draw(backgroundImage, warningX, warningY, warningWidth, warningHeight);
-        
+
         // Добавляем красную рамку для привлечения внимания
         float borderThickness = GAME_HEIGHT * 0.008f; // Толщина рамки (уменьшена с 0.01f)
         game.batch.setColor(0.9f, 0.1f, 0.1f, blinkValue);
-        
+
         // Верхняя граница
         game.batch.draw(backgroundImage, warningX, warningY + warningHeight - borderThickness, warningWidth, borderThickness);
         // Нижняя граница
@@ -2535,26 +2535,26 @@ public class GameScreen implements Screen {
         game.batch.draw(backgroundImage, warningX, warningY, borderThickness, warningHeight);
         // Правая граница
         game.batch.draw(backgroundImage, warningX + warningWidth - borderThickness, warningY, borderThickness, warningHeight);
-        
+
         // Получаем шрифт для предупреждения
         BitmapFont warningFont = game.fontManager.getUIFont();
         warningFont.setColor(1, 0.3f, 0.3f, blinkValue); // Красноватый текст с пульсацией
-        
+
         // Масштабируем шрифт относительно размера экрана (увеличенный)
         float fontScale = GAME_WIDTH / 1100f; // Увеличенный масштаб шрифта (было 1500f)
         warningFont.getData().setScale(fontScale);
-        
+
         // Текст предупреждения
         String warningText = "ВНИМАНИЕ! НИЗКИЙ УРОВЕНЬ ТОПЛИВА!";
-        
+
         // Измеряем ширину текста для центрирования
         GlyphLayout layout = new GlyphLayout(warningFont, warningText);
         float x = warningX + (warningWidth - layout.width) / 2;
         float y = warningY + (warningHeight + layout.height) / 2;
-        
+
         // Отрисовка текста предупреждения
         warningFont.draw(game.batch, warningText, x, y);
-        
+
         // Сбрасываем цвет и масштаб шрифта
         warningFont.setColor(1, 1, 1, 1);
         warningFont.getData().setScale(1f);
