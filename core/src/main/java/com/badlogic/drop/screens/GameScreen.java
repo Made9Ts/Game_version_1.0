@@ -30,12 +30,16 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.drop.systems.AchievementSystem;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.controllers.Controllers;
+import com.badlogic.gdx.controllers.Controller;
+import com.badlogic.gdx.controllers.ControllerListener;
+import com.badlogic.gdx.controllers.ControllerMapping;
 
 /**
  * Основной экран игрового процесса, адаптированный для Samsung Galaxy S24 Ultra.
  * Содержит всю логику игры, управление объектами, показ UI и обработку ввода.
  */
-public class GameScreen implements Screen {
+public class GameScreen implements Screen, ControllerListener {
     // Константы размеров экрана
     private static final float GAME_WIDTH = SpaceCourierGame.GAME_WIDTH;
     private static final float GAME_HEIGHT = SpaceCourierGame.GAME_HEIGHT;
@@ -187,6 +191,13 @@ public class GameScreen implements Screen {
     // Параметры стрельбы игрока
     private long lastPlayerShootTime = 0; // Время последнего выстрела игрока
 
+    // Константы для контроллера
+    private static final float CONTROLLER_DEADZONE = 0.25f; // Мертвая зона для стиков
+    
+    // Состояние контроллера
+    private Controller activeController;
+    private boolean controllerConnected = false;
+
     /**
      * Класс для бонусов в игре
      */
@@ -314,6 +325,9 @@ public class GameScreen implements Screen {
 
         // Создаем систему управления сложностью
         difficultySystem = new DifficultySystem();
+        
+        // Инициализируем поддержку контроллеров
+        initializeControllers();
 
         // Инициализируем игру
         initGame();
@@ -1117,31 +1131,43 @@ public class GameScreen implements Screen {
         // Проверка на стрельбу (только при битве с боссом)
         if (bossActive && !isPaused && !gameOver) {
             boolean shouldShoot = false;
-
+            
             // Проверка удержания пальца на экране (непрерывная стрельба)
             if (Gdx.input.isTouched()) {
                 // Получаем позицию касания
                 Vector3 touchPos = new Vector3();
                 touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
                 camera.unproject(touchPos);
-
+                
                 // Проверяем, что касание не на кнопке паузы
                 if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
                     touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
                     shouldShoot = true;
                 }
             }
-
+            
             // Проверка нажатия пробела (непрерывная стрельба)
             if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
                 shouldShoot = true;
             }
-
+            
+            // Проверка контроллера для стрельбы
+            if (controllerConnected && activeController != null) {
+                // Проверяем кнопку A (Xbox) или X (PlayStation) - обычно кнопка 0
+                if (activeController.getButton(0)) {
+                    shouldShoot = true;
+                }
+            }
+            
             // Если нужно стрелять и прошло достаточно времени с последнего выстрела
             if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
                 playerShoot();
             }
         }
+
+        // Переменные для хранения движения
+        float moveX = 0;
+        float moveY = 0;
 
         // Обработка сенсорного ввода для движения корабля
         if (Gdx.input.isTouched()) {
@@ -1179,14 +1205,43 @@ public class GameScreen implements Screen {
             if (isPaused || gameOver) return;
 
             // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
-            float moveX = 0;
-            float moveY = 0;
-
             // Определяем направление движения по осям X и Y
             if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1;
             if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1;
             if (Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1;
             if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1;
+
+            // Обработка контроллера для движения, если он подключен
+            if (controllerConnected && activeController != null) {
+                // Получаем значения левого стика
+                float axisX = activeController.getAxis(0); // Обычно горизонтальная ось левого стика
+                float axisY = -activeController.getAxis(1); // Обычно вертикальная ось левого стика (инвертируем)
+                
+                // Применяем мертвую зону к стикам
+                if (Math.abs(axisX) > CONTROLLER_DEADZONE) {
+                    moveX += axisX;
+                }
+                
+                if (Math.abs(axisY) > CONTROLLER_DEADZONE) {
+                    moveY += axisY;
+                }
+                
+                // Проверяем D-pad (крестовину)
+                // В разных контроллерах могут быть разные индексы кнопок
+                // Пробуем наиболее распространенные варианты
+                
+                // Вариант 1: кнопки 11-14 для D-pad
+                if (activeController.getButton(11)) moveX -= 1; // Влево
+                if (activeController.getButton(12)) moveX += 1; // Вправо
+                if (activeController.getButton(13)) moveY += 1; // Вверх
+                if (activeController.getButton(14)) moveY -= 1; // Вниз
+                
+                // Вариант 2: альтернативные индексы для D-pad
+                if (activeController.getButton(4)) moveY += 1; // Вверх
+                if (activeController.getButton(5)) moveY -= 1; // Вниз
+                if (activeController.getButton(6)) moveX -= 1; // Влево
+                if (activeController.getButton(7)) moveX += 1; // Вправо
+            }
 
             // Если движемся по диагонали, нормализуем скорость
             if (moveX != 0 && moveY != 0) {
@@ -1495,7 +1550,7 @@ public class GameScreen implements Screen {
         collectSound.dispose();
         explosionSound.dispose();
         gameMusic.dispose();
-
+        
         // Освобождаем ресурсы UI
         if (gameOverStage != null) gameOverStage.dispose();
         if (gameOverSkin != null) gameOverSkin.dispose();
@@ -1508,6 +1563,9 @@ public class GameScreen implements Screen {
         speedBoostTexture.dispose();
         magnetTexture.dispose();
         doubleScoreTexture.dispose();
+        
+        // Удаляем слушателя контроллеров
+        Controllers.removeListener(this);
     }
 
     /**
@@ -2559,5 +2617,72 @@ public class GameScreen implements Screen {
         warningFont.setColor(1, 1, 1, 1);
         warningFont.getData().setScale(1f);
         game.batch.setColor(1, 1, 1, 1);
+    }
+
+    /**
+     * Инициализирует поддержку контроллеров
+     */
+    private void initializeControllers() {
+        // Регистрируем слушателя контроллеров
+        Controllers.addListener(this);
+        
+        // Проверяем, подключен ли контроллер
+        if (Controllers.getControllers().size > 0) {
+            activeController = Controllers.getControllers().first();
+            controllerConnected = true;
+            Gdx.app.log("GameScreen", "Controller connected: " + activeController.getName());
+        }
+    }
+
+    // Методы интерфейса ControllerListener
+
+    @Override
+    public void connected(Controller controller) {
+        if (activeController == null) {
+            activeController = controller;
+            controllerConnected = true;
+            Gdx.app.log("GameScreen", "Controller connected: " + controller.getName());
+        }
+    }
+
+    @Override
+    public void disconnected(Controller controller) {
+        if (activeController == controller) {
+            activeController = null;
+            controllerConnected = false;
+            Gdx.app.log("GameScreen", "Controller disconnected");
+            
+            // Если есть другие контроллеры, используем первый доступный
+            if (Controllers.getControllers().size > 0) {
+                activeController = Controllers.getControllers().first();
+                controllerConnected = true;
+                Gdx.app.log("GameScreen", "Switched to controller: " + activeController.getName());
+            }
+        }
+    }
+
+    @Override
+    public boolean buttonDown(Controller controller, int buttonCode) {
+        // Для паузы используем кнопку Start (обычно кнопка 7 или 9)
+        if ((buttonCode == 7 || buttonCode == 9) && !gameOver) {
+            if (isPaused) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return true;
+        }
+        
+        return false;
+    }
+
+    @Override
+    public boolean buttonUp(Controller controller, int buttonCode) {
+        return false;
+    }
+
+    @Override
+    public boolean axisMoved(Controller controller, int axisCode, float value) {
+        return false;
     }
 }
