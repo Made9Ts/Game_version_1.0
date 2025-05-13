@@ -41,18 +41,18 @@ public class DifficultySystem {
     
     // Постоянные значения
     private static final float MIN_DIFFICULTY = 1.0f;
-    private static final float MAX_DIFFICULTY = 10.0f;      // Увеличен максимум сложности
+    private static final float MAX_DIFFICULTY = 15.0f;      // Увеличен максимум сложности с 10.0f до 15.0f
     private static final float MIN_PLAYER_SKILL = 0.5f;
     private static final float MAX_PLAYER_SKILL = 2.0f;
     private static final float MAX_COMBO_TIME = 5.0f;       // Время для поддержания комбо (сек)
     
     // Коэффициенты для расчетов
-    private static final float DIFFICULTY_PROGRESSION_RATE = 0.0003f;    // Снижена скорость роста базовой сложности
-    private static final float PLAYER_SKILL_SUCCESS_DELTA = 0.02f;       // Снижено влияние успехов
-    private static final float PLAYER_SKILL_FAILURE_DELTA = 0.05f;       // Снижено влияние неудач
-    private static final float PLAYER_SKILL_WEIGHT = 0.6f;               // Снижен вес навыка
-    private static final float DIFFICULTY_SMOOTHING = 0.05f;             // Более плавное изменение сложности
-    private static final float PLAY_STYLE_ADAPTATION_RATE = 0.01f;       // Скорость адаптации под стиль игры
+    private static final float DIFFICULTY_PROGRESSION_RATE = 0.0006f;    // Увеличена скорость роста базовой сложности (0.0003f -> 0.0006f)
+    private static final float PLAYER_SKILL_SUCCESS_DELTA = 0.03f;       // Увеличено влияние успехов (0.02f -> 0.03f)
+    private static final float PLAYER_SKILL_FAILURE_DELTA = 0.04f;       // Немного уменьшено влияние неудач (0.05f -> 0.04f)
+    private static final float PLAYER_SKILL_WEIGHT = 0.7f;               // Увеличен вес навыка (0.6f -> 0.7f)
+    private static final float DIFFICULTY_SMOOTHING = 0.08f;             // Ускорено изменение сложности (0.05f -> 0.08f)
+    private static final float PLAY_STYLE_ADAPTATION_RATE = 0.02f;       // Увеличена скорость адаптации (0.01f -> 0.02f)
     
     // Зона комфорта - контролирует вызовы игрока
     private float comfortZoneMin = 0.8f;   // Минимальный уровень относительно базовой сложности
@@ -212,7 +212,7 @@ public class DifficultySystem {
             // При переходе на новый уровень увеличиваем базовую сложность
             // Большой скачок уровня = больший прирост сложности
             float levelDelta = currentLevel - oldLevel;
-            baseDifficulty += 0.2f * levelDelta;
+            baseDifficulty += 0.5f * levelDelta;
             
             // Сбрасываем время выживания при переходе на новый уровень
             survivalTime = 0;
@@ -358,17 +358,17 @@ public class DifficultySystem {
         float styleModifier = 0;
         
         // Агрессивным игрокам увеличиваем сложность
-        if (aggressivePlayStyle > 0.6f) {
-            styleModifier += (aggressivePlayStyle - 0.6f) * 0.5f;
+        if (aggressivePlayStyle > 0.5f) {
+            styleModifier += (aggressivePlayStyle - 0.5f) * 0.8f;
         }
         
         // Активным сборщикам немного понижаем сложность для баланса
-        if (collectorPlayStyle > 0.7f) {
-            styleModifier -= (collectorPlayStyle - 0.7f) * 0.3f;
+        if (collectorPlayStyle > 0.6f) {
+            styleModifier -= (collectorPlayStyle - 0.6f) * 0.2f;
         }
         
         // Добавляем бонус сложности за длительное выживание на уровне
-        float survivalBonus = Math.min(0.2f, survivalTime * 0.001f);
+        float survivalBonus = Math.min(0.3f, survivalTime * 0.002f);
         
         // Итоговая формула с учетом всех факторов
         float targetDifficulty = baseDifficulty * (1.0f + skillModifier + styleModifier + survivalBonus);
