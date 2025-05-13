@@ -7,15 +7,20 @@ import com.badlogic.drop.util.SoundManager;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
-import com.badlogic.gdx.utils.viewport.FitViewport;
 
 /**
- * Основной класс игры, адаптированный для Samsung Galaxy S24 Ultra
+ * Основной класс игры Space Courier, адаптированный для Samsung Galaxy S24 Ultra.
+ * Управляет жизненным циклом игры и основными ресурсами.
  */
 public class SpaceCourierGame extends Game {
-	// Константы разрешения для S24 Ultra
-	public static final float GAME_WIDTH = 720; // Виртуальная ширина (половина реального разрешения для производительности)
+	// Константы разрешения для Samsung Galaxy S24 Ultra
+	public static final float GAME_WIDTH = 720; // Виртуальная ширина (оптимизирована для производительности)
 	public static final float GAME_HEIGHT = 1560; // Виртуальная высота с сохранением пропорций
+	
+	// Константы для элементов интерфейса
+	public static final float UI_PADDING = 20f;
+	public static final float UI_BUTTON_WIDTH = 450f;
+	public static final float UI_BUTTON_HEIGHT = 120f;
 	
 	// Менеджеры ресурсов и систем
 	public SpriteBatch batch;
@@ -33,13 +38,18 @@ public class SpaceCourierGame extends Game {
 	}
 	
 	/**
-	 * Инициализирует все необходимые ресурсы и системы игры
+	 * Инициализирует все необходимые ресурсы и системы игры.
+	 * Создает менеджеры ресурсов и загружает необходимые ассеты.
 	 */
 	private void initializeResources() {
+		// Инициализация основных ресурсов
 		batch = new SpriteBatch();
 		fontManager = new FontManager();
 		achievementSystem = new AchievementSystem();
 		soundManager = new SoundManager();
+		
+		// Инициализация атласа текстур (если используется)
+		// gameAtlas = new TextureAtlas("game_textures.atlas");
 	}
 
 	@Override
@@ -55,8 +65,9 @@ public class SpaceCourierGame extends Game {
 	}
 
 	/**
-	 * Пересоздает менеджер шрифтов с нуля
+	 * Пересоздает менеджер шрифтов с нуля.
 	 * Используется для решения проблем с сохранением состояний шрифтов
+	 * при переключении между экранами.
 	 */
 	public void recreateFontManager() {
 		if (fontManager != null) {
@@ -72,16 +83,19 @@ public class SpaceCourierGame extends Game {
 	}
 	
 	/**
-	 * Освобождает все ресурсы, используемые игрой
+	 * Освобождает все ресурсы, используемые игрой.
+	 * Вызывается при закрытии приложения.
 	 */
 	private void disposeResources() {
 		if (batch != null) batch.dispose();
 		if (gameAtlas != null) gameAtlas.dispose();
 		if (fontManager != null) fontManager.dispose();
+		if (soundManager != null) soundManager.dispose();
+		if (achievementSystem != null) achievementSystem.dispose();
 	}
 	
 	/**
-	 * Освобождает ресурсы текущего экрана
+	 * Освобождает ресурсы текущего экрана.
 	 */
 	private void disposeCurrentScreen() {
 		if (getScreen() != null) {
