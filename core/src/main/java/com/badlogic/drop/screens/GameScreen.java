@@ -32,13 +32,38 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.GL20;
 
 /**
- * Основной экран игрового процесса, адаптированный для Samsung Galaxy S24 Ultra
+ * Основной экран игрового процесса, адаптированный для Samsung Galaxy S24 Ultra.
+ * Содержит всю логику игры, управление объектами, показ UI и обработку ввода.
  */
 public class GameScreen implements Screen {
-    // Константы для вертикальной ориентации, адаптированные для S24 Ultra
-    private static final float GAME_WIDTH = 720; // Половина ширины S24 Ultra для улучшения производительности
-    private static final float GAME_HEIGHT = 1560; // Масштабированная высота с сохранением пропорций
+    // Константы размеров экрана
+    private static final float GAME_WIDTH = SpaceCourierGame.GAME_WIDTH;
+    private static final float GAME_HEIGHT = SpaceCourierGame.GAME_HEIGHT;
     
+    // Константы размеров объектов
+    private static final int SHIP_SIZE = 96;
+    private static final int ASTEROID_SIZE = 96;
+    private static final int ENEMY_SIZE = 96;
+    private static final int FUEL_SIZE = 48;
+    private static final int HEART_SIZE = 48;
+    private static final int POWERUP_SIZE = 64;
+    private static final float POWERUP_ICON_SIZE = 40;
+    
+    // Константы игрового процесса
+    private static final int SHIP_SPEED = 500;
+    private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
+    private static final float MAX_FUEL = 100f;
+    private static final float FUEL_CONSUMPTION = 2.4f;
+    private static final int MAX_LIVES = 3;
+    
+    // Константы интервалов появления объектов
+    private static final long GROUP_PAUSE = 3000000000L;
+    
+    // Константы для анимаций и уведомлений
+    private static final float LEVEL_UP_ANIMATION_DURATION = 2.0f;
+    private static final float ACHIEVEMENT_NOTIFICATION_DURATION = 3.0f;
+    
+    // Ссылка на основной класс игры
     private final SpaceCourierGame game;
 
     // Графические объекты
@@ -50,9 +75,13 @@ public class GameScreen implements Screen {
     private Texture asteroidImage;
     private Texture enemyImage;
     private Texture fuelImage;
-    private Texture heartImage; // Текстура сердечка
+    private Texture heartImage;
     private Texture backgroundImage;
     private Texture pauseButtonTexture;
+    private Texture shieldTexture;
+    private Texture speedBoostTexture;
+    private Texture magnetTexture;
+    private Texture doubleScoreTexture;
 
     // Звуки и музыка
     private Sound collectSound;
@@ -74,46 +103,13 @@ public class GameScreen implements Screen {
     private boolean achievementNotificationActive;
     private float achievementNotificationTime;
     private String achievementNotificationText;
-    private static final float ACHIEVEMENT_NOTIFICATION_DURATION = 3.0f;
 
-    // Класс для бонусов
-    private class Powerup {
-        Rectangle bounds;
-        PowerupType type;
-        float activeDuration;
-        float activeTime;
-        boolean active;
-        
-        Powerup(float x, float y, PowerupType type) {
-            this.bounds = new Rectangle(x, y, POWERUP_SIZE, POWERUP_SIZE);
-            this.type = type;
-            this.activeDuration = 10f; // 10 секунд действия
-            this.activeTime = 0;
-            this.active = false;
-        }
-    }
-    
-    // Типы бонусов
-    private enum PowerupType {
-        SHIELD,        // Защита от столкновений
-        SPEED_BOOST,   // Увеличение скорости
-        MAGNET,        // Притягивает топливо и сердечки
-        DOUBLE_SCORE   // Удвоение очков
-    }
-    
     // Состояние бонусов
     private boolean shieldActive;
     private boolean speedBoostActive;
     private boolean magnetActive;
     private boolean doubleScoreActive;
-    private float powerupIconSize = 40;
     
-    // Текстуры бонусов
-    private Texture shieldTexture;
-    private Texture speedBoostTexture;
-    private Texture magnetTexture;
-    private Texture doubleScoreTexture;
-
     // Параметры игры
     private long lastAsteroidTime;
     private long lastEnemyTime;
@@ -125,17 +121,15 @@ public class GameScreen implements Screen {
     private boolean gameOver;
     private boolean needHeart;
     
-    // Добавляем переменные для контроля групп астероидов и врагов
+    // Параметры групп объектов
     private int asteroidsInGroup = 0;
-    private int maxAsteroidsPerGroup = 3; // Максимальное количество астероидов в группе
+    private int maxAsteroidsPerGroup = 3;
     private int enemiesInGroup = 0;
-    private int maxEnemiesPerGroup = 2; // Максимальное количество врагов в группе
-    private static final long GROUP_PAUSE = 3000000000L; // Пауза между группами (3 секунды)
+    private int maxEnemiesPerGroup = 2;
     
     // Анимация нового уровня
     private boolean showLevelUpAnimation;
     private float levelUpAnimationTime;
-    private static final float LEVEL_UP_ANIMATION_DURATION = 2.0f;
     private String levelUpMessage;
 
     // Система настройки сложности
@@ -146,7 +140,7 @@ public class GameScreen implements Screen {
     private Skin gameOverSkin;
     private TextButton restartButton;
     private TextButton menuButton;
-    private TextButton scoreLabel; // Добавляем переменную для отображения счета
+    private TextButton scoreLabel;
     
     // UI для экрана паузы
     private Stage pauseStage;
@@ -156,109 +150,128 @@ public class GameScreen implements Screen {
     private boolean isPaused;
     private Rectangle pauseButtonRect;
 
-    // Константы
-    private static final int SHIP_SPEED = 500; // Увеличенная скорость для больших экранов
-    private static final float SPEED_BOOST_MULTIPLIER = 1.5f; // Множитель скорости для бонуса
-    private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 2.4f; // Увеличенный расход топлива (в 2 раза больше)
-
-    // Размеры игровых объектов для больших экранов
-    private static final int SHIP_SIZE = 96;
-    private static final int ASTEROID_SIZE = 96;
-    private static final int ENEMY_SIZE = 96;
-    private static final int FUEL_SIZE = 48;
-    private static final int HEART_SIZE = 48; // Размер сердечка
-    private static final int POWERUP_SIZE = 64; // Размер бонуса
-
-    // Добавляем флаг для принудительной отрисовки экрана проигрыша
+    // Внутренние флаги отрисовки
     private boolean forceGameOverRender = false;
+    
+    /**
+     * Класс для бонусов в игре
+     */
+    private class Powerup {
+        Rectangle bounds;
+        PowerupType type;
+        float activeDuration;
+        float activeTime;
+        boolean active;
+        
+        /**
+         * Создает новый бонус указанного типа в заданной позиции
+         */
+        Powerup(float x, float y, PowerupType type) {
+            this.bounds = new Rectangle(x, y, POWERUP_SIZE, POWERUP_SIZE);
+            this.type = type;
+            this.activeDuration = 10f;
+            this.activeTime = 0;
+            this.active = false;
+        }
+    }
+    
+    /**
+     * Типы бонусов в игре
+     */
+    private enum PowerupType {
+        SHIELD,        // Защита от столкновений
+        SPEED_BOOST,   // Увеличение скорости
+        MAGNET,        // Притягивает топливо и сердечки
+        DOUBLE_SCORE   // Удвоение очков
+    }
 
+    /**
+     * Создает новый экран игры
+     */
     public GameScreen(final SpaceCourierGame game) {
         this.game = game;
-
-        // Инициализация графики для вертикальной ориентации
+        
+        // Инициализируем графику (включая pauseStage)
+        initializeGraphics();
+        
+        // Загружаем игровые ресурсы
+        loadResources();
+        
+        // Проверяем состояние аудио (звуки и музыка)
+        checkAudioSettings();
+        
+        // Создаем экран конца игры
+        createGameOverUI();
+        
+        // Создаем систему управления сложностью
+        difficultySystem = new DifficultySystem();
+        
+        // Инициализируем игру
+        initGame();
+    }
+    
+    /**
+     * Инициализирует графику (камера, шрифты и т.д.)
+     */
+    private void initializeGraphics() {
+        // Настройка камеры
         camera = new OrthographicCamera();
         camera.setToOrtho(false, GAME_WIDTH, GAME_HEIGHT);
         
-        // Используем шрифт из FontManager
         font = game.fontManager.getGameFont();
-
-        // Загрузка текстур с фильтрацией для лучшего качества
-        shipImage = new Texture("ship.png");
+        
+        // Создаем область для кнопки паузы - увеличиваем размер для удобства нажатия
+        pauseButtonRect = new Rectangle(
+            GAME_WIDTH - 90, GAME_HEIGHT - 90, 70, 70
+        );
+        
+        // Инициализация сцены паузы
+        pauseStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
+        
+        // Создаем UI паузы сразу
+        createPauseUI();
+    }
+    
+    /**
+     * Загружает текстуры и звуки
+     */
+    private void loadResources() {
+        // Загрузка текстур
+        shipImage = new Texture(Gdx.files.internal("ship.png"));
         shipImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
-        asteroidImage = new Texture("asteroid.png");
+        asteroidImage = new Texture(Gdx.files.internal("asteroid.png"));
         asteroidImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
-        enemyImage = new Texture("enemy.png");
+        enemyImage = new Texture(Gdx.files.internal("enemy.png"));
         enemyImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
-        fuelImage = new Texture("fuel.png");
+        fuelImage = new Texture(Gdx.files.internal("fuel.png"));
         fuelImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         
-        heartImage = new Texture("heart.png"); // Загружаем текстуру сердечка
+        heartImage = new Texture(Gdx.files.internal("heart.png"));
         heartImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-
-        backgroundImage = new Texture("background.png");
+        
+        backgroundImage = new Texture(Gdx.files.internal("background.png"));
         backgroundImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         
-        // Загружаем текстуру кнопки паузы
-        pauseButtonTexture = new Texture("pause_button.png");
+        pauseButtonTexture = new Texture(Gdx.files.internal("pause_button.png"));
         pauseButtonTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         
-        // Инициализация области кнопки паузы
-        float pauseButtonSize = 60;
-        pauseButtonRect = new Rectangle(GAME_WIDTH - pauseButtonSize - 20, GAME_HEIGHT - pauseButtonSize - 20, 
-                                       pauseButtonSize, pauseButtonSize);
-        
-        // Загружаем текстуры бонусов
-        shieldTexture = new Texture("shield.png");
-        shieldTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        
-        speedBoostTexture = new Texture("speed.png");
-        speedBoostTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        
-        magnetTexture = new Texture("magnet.png");
-        magnetTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        
-        doubleScoreTexture = new Texture("double_score.png");
-        doubleScoreTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        // Загрузка текстур бонусов
+        shieldTexture = new Texture(Gdx.files.internal("shield.png"));
+        speedBoostTexture = new Texture(Gdx.files.internal("speed.png"));
+        magnetTexture = new Texture(Gdx.files.internal("magnet.png"));
+        doubleScoreTexture = new Texture(Gdx.files.internal("double_score.png"));
 
         // Загрузка звуков
         collectSound = Gdx.audio.newSound(Gdx.files.internal("collect.wav"));
         explosionSound = Gdx.audio.newSound(Gdx.files.internal("explosion.wav"));
         gameMusic = Gdx.audio.newMusic(Gdx.files.internal("gamemusic.mp3"));
-
+        
         // Настройка музыки
         gameMusic.setLooping(true);
-        
-        // Проверяем настройки звука
-        if (game.soundManager.isMusicEnabled()) {
-            gameMusic.play();
-        } else {
-            gameMusic.stop();
-        }
-
-        // Создание и настройка системы сложности
-        difficultySystem = new DifficultySystem();
-        
-        // Инициализация сцены для экрана проигрыша
-        gameOverStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
-        
-        // Создаем UI для экрана проигрыша
-        createGameOverUI();
-        
-        // Инициализация сцены для экрана паузы
-        pauseStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
-        
-        // Создаем UI для экрана паузы
-        createPauseUI();
-        
-        // Инициализируем переменную паузы
-        isPaused = false;
-
-        // Инициализация игровых объектов
-        initGame();
+        game.soundManager.setMusic(gameMusic, true);
     }
 
     private void initGame() {
@@ -359,135 +372,90 @@ public class GameScreen implements Screen {
     @Override
     public void render(float delta) {
         // Очистка экрана
-        ScreenUtils.clear(0, 0, 0.2f, 1);
-
-        // Обновление камеры
-        camera.update();
-        game.batch.setProjectionMatrix(camera.combined);
+        clearScreen();
         
-        // Обработка игровой логики, если игра не окончена и не на паузе
-        if (!gameOver && !isPaused) {
+        // Обработка ввода (должна быть раньше обновления игры)
+        handleInput(delta);
+        
+        // Обновление игрового состояния, если игра не на паузе
+        if (!isPaused && !gameOver) {
             updateGame(delta);
         }
         
-        // Проверяем настройки звука для музыки
-        if (!gameOver && !isPaused && game.soundManager.isMusicEnabled() && !gameMusic.isPlaying()) {
-            gameMusic.play();
-        } else if ((!game.soundManager.isMusicEnabled() || isPaused || gameOver) && gameMusic.isPlaying()) {
-            gameMusic.pause();
-        }
-
-        // Начало отрисовки
+        // Отрисовка игры
+        drawGame(delta);
+        
+        // Отрисовка UI оверлеев (интерфейс паузы, конца игры)
+        drawUI(delta);
+    }
+    
+    /**
+     * Очищает экран перед рендерингом
+     */
+    private void clearScreen() {
+        // Очистка экрана с цветом фона игры
+        Gdx.gl.glClearColor(0.05f, 0.05f, 0.1f, 1);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        
+        // Обновление камеры
+        camera.update();
+        game.batch.setProjectionMatrix(camera.combined);
+    }
+    
+    /**
+     * Отрисовывает все игровые объекты
+     */
+    private void drawGame(float delta) {
         game.batch.begin();
         
-        // Отрисовка фона
+        // Фон
         game.batch.draw(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
         
-        // Отрисовка игровых объектов, если игра активна
-        if (!gameOver) {
-            // Корабль игрока
-            game.batch.draw(shipImage, ship.x, ship.y, ship.width, ship.height);
+        // Отрисовка объектов только если игра не окончена
+        if (!gameOver || forceGameOverRender) {
+            // Игровые объекты
+            drawGameObjects();
             
-            // Астероиды
-            for (Rectangle asteroid : asteroids) {
-                game.batch.draw(asteroidImage, asteroid.x, asteroid.y, asteroid.width, asteroid.height);
-            }
-            
-            // Враги
-            for (Rectangle enemy : enemies) {
-                game.batch.draw(enemyImage, enemy.x, enemy.y, enemy.width, enemy.height);
-            }
-            
-            // Канистры с топливом
-            for (Rectangle fuelCanister : fuelCanisters) {
-                game.batch.draw(fuelImage, fuelCanister.x, fuelCanister.y, fuelCanister.width, fuelCanister.height);
-            }
-            
-            // Сердечки
-            for (Rectangle heart : hearts) {
-                game.batch.draw(heartImage, heart.x, heart.y, heart.width, heart.height);
-            }
-            
-            // Отрисовка бонусов
-            for (Powerup powerup : powerups) {
-                if (!powerup.active) {
-                    // Отрисовываем только неактивированные бонусы
-                    Texture powerupTexture = getPowerupTexture(powerup.type);
-                    game.batch.draw(powerupTexture, powerup.bounds.x, powerup.bounds.y, 
-                                   powerup.bounds.width, powerup.bounds.height);
-                }
-            }
-            
-            // Отрисовка эффекта щита, если он активен
-            if (shieldActive) {
-                // Увеличиваем размер щита относительно корабля
-                float shieldSize = SHIP_SIZE * 1.5f;
-                game.batch.setColor(0.4f, 0.8f, 1.0f, 0.6f);
-                game.batch.draw(shieldTexture, 
-                               ship.x - (shieldSize - ship.width) / 2, 
-                               ship.y - (shieldSize - ship.height) / 2, 
-                               shieldSize, shieldSize);
-                game.batch.setColor(1, 1, 1, 1);
-            }
-            
-            // Отрисовка интерфейса
+            // Интерфейс
             drawGameInterface();
             
-            // Отображение анимации нового уровня, если необходимо
+            // Отрисовка кнопки паузы (если игра не на паузе)
+            if (!isPaused && pauseButtonTexture != null) {
+                game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y, 
+                                pauseButtonRect.width, pauseButtonRect.height);
+            }
+            
+            // Если есть активная анимация нового уровня, рисуем ее
             if (showLevelUpAnimation) {
                 drawLevelUpAnimation(delta);
             }
             
-            // Отображение уведомления о достижении, если оно активно
+            // Если есть активное уведомление о достижении, рисуем его
             if (achievementNotificationActive) {
                 drawAchievementNotification(delta);
             }
-            
-            // Отрисовка кнопки паузы
-            game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y, 
-                         pauseButtonRect.width, pauseButtonRect.height);
-            
-            // Обработка нажатия на кнопку паузы
-            if (Gdx.input.justTouched() && !isPaused) {
-                Vector3 touchPos = new Vector3();
-                touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
-                camera.unproject(touchPos);
-                
-                // Проверка нажатия на кнопку паузы
-                if (pauseButtonRect.contains(touchPos.x, touchPos.y)) {
-                    // Ставим игру на паузу
-                    isPaused = true;
-                    
-                    // Останавливаем музыку
-                    gameMusic.pause();
-                    
-                    // Устанавливаем обработчик ввода на экран паузы
-                    Gdx.input.setInputProcessor(pauseStage);
-                }
-            }
-            
-            // Если игра на паузе, отображаем экран паузы
-            if (isPaused) {
-                game.batch.end();
-                pauseStage.act(delta);
-                pauseStage.draw();
-                return; // Выходим из функции, чтобы избежать повторного вызова batch.end()
-            }
-        } else {
-            // Если игра окончена или установлен флаг принудительной отрисовки
-            game.batch.end();
-            gameOverStage.act(delta);
-            gameOverStage.draw();
-            
-            // Сбрасываем флаг после отрисовки
-            if (forceGameOverRender) {
-                forceGameOverRender = false;
-            }
-            
-            return; // Выходим из функции, чтобы избежать повторного вызова batch.end()
         }
         
         game.batch.end();
+    }
+    
+    /**
+     * Отрисовывает UI оверлеи (экраны паузы, конца игры)
+     */
+    private void drawUI(float delta) {
+        // Если игра окончена, рисуем экран проигрыша
+        if (gameOver) {
+            // Отрисовка сцены с кнопками конца игры
+            gameOverStage.act(delta);
+            gameOverStage.draw();
+        }
+        
+        // Если игра на паузе, рисуем экран паузы
+        if (isPaused) {
+            // Отрисовка сцены с кнопками паузы
+            pauseStage.act(delta);
+            pauseStage.draw();
+        }
     }
     
     // Отрисовка игрового интерфейса
@@ -548,25 +516,25 @@ public class GameScreen implements Screen {
         font.setColor(1, 1, 1, 1);
         
         // Отображение активных бонусов
-        float iconX = GAME_WIDTH - powerupIconSize - 20;
+        float iconX = GAME_WIDTH - POWERUP_ICON_SIZE - 20;
         
         if (shieldActive) {
-            game.batch.draw(shieldTexture, iconX, GAME_HEIGHT - powerupIconSize - 20, powerupIconSize, powerupIconSize);
-            iconX -= powerupIconSize + 10;
+            game.batch.draw(shieldTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            iconX -= POWERUP_ICON_SIZE + 10;
         }
         
         if (speedBoostActive) {
-            game.batch.draw(speedBoostTexture, iconX, GAME_HEIGHT - powerupIconSize - 20, powerupIconSize, powerupIconSize);
-            iconX -= powerupIconSize + 10;
+            game.batch.draw(speedBoostTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            iconX -= POWERUP_ICON_SIZE + 10;
         }
         
         if (magnetActive) {
-            game.batch.draw(magnetTexture, iconX, GAME_HEIGHT - powerupIconSize - 20, powerupIconSize, powerupIconSize);
-            iconX -= powerupIconSize + 10;
+            game.batch.draw(magnetTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            iconX -= POWERUP_ICON_SIZE + 10;
         }
         
         if (doubleScoreActive) {
-            game.batch.draw(doubleScoreTexture, iconX, GAME_HEIGHT - powerupIconSize - 20, powerupIconSize, powerupIconSize);
+            game.batch.draw(doubleScoreTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
         }
     }
     
@@ -732,27 +700,44 @@ public class GameScreen implements Screen {
         // Обработка клавиши Escape для паузы
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
             if (isPaused) {
-                // Если уже на паузе, снимаем паузу
-                isPaused = false;
-                // Возвращаем обработку ввода к игре
-                Gdx.input.setInputProcessor(null);
-                // Возобновляем музыку
-                if (!gameMusic.isPlaying() && game.soundManager.isMusicEnabled()) {
-                    gameMusic.play();
-                }
+                resumeGame();
             } else {
-                // Ставим игру на паузу
-                isPaused = true;
-                // Останавливаем музыку
-                gameMusic.pause();
-                // Устанавливаем обработчик ввода на экран паузы
-                Gdx.input.setInputProcessor(pauseStage);
+                pauseGame();
             }
             return; // Выходим из метода, чтобы не обрабатывать другие клавиши
         }
         
-        // Обработка сенсорного ввода (однопальцевый тач)
+        // Проверка касания кнопки паузы (обработка до других действий)
+        if (!gameOver && Gdx.input.justTouched()) {
+            Vector3 touchPos = new Vector3();
+            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+            camera.unproject(touchPos);
+            
+            // Отладочная информация о позиции касания
+            Gdx.app.debug("GameScreen", "Touch at X:" + touchPos.x + " Y:" + touchPos.y);
+            Gdx.app.debug("GameScreen", "Pause button at X:" + pauseButtonRect.x + " Y:" + pauseButtonRect.y + 
+                         " Width:" + pauseButtonRect.width + " Height:" + pauseButtonRect.height);
+            
+            // Проверяем, было ли касание по кнопке паузы
+            if (touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
+                touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height) {
+                
+                Gdx.app.log("GameScreen", "Pause button touched");
+                
+                if (isPaused) {
+                    resumeGame();
+                } else {
+                    pauseGame();
+                }
+                return; // Выходим из метода, чтобы не обрабатывать другие касания
+            }
+        }
+        
+        // Обработка сенсорного ввода для движения корабля
         if (Gdx.input.isTouched()) {
+            // Если игра на паузе, не обрабатываем движения
+            if (isPaused || gameOver) return;
+            
             Vector3 touchPos = new Vector3();
             touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
             camera.unproject(touchPos);
@@ -780,6 +765,9 @@ public class GameScreen implements Screen {
                 ship.y -= moveStep;
             }
         } else {
+            // Если игра на паузе, не обрабатываем движения
+            if (isPaused || gameOver) return;
+            
             // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
             float moveX = 0;
             float moveY = 0;
@@ -1485,16 +1473,8 @@ public class GameScreen implements Screen {
         continueButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                // Возобновляем игру
-                isPaused = false;
-                
-                // Возвращаем обработку ввода к игре
-                Gdx.input.setInputProcessor(null);
-                
-                // Возобновляем музыку, если она остановлена
-                if (!gameMusic.isPlaying()) {
-                    gameMusic.play();
-                }
+                // Возобновляем игру, используя метод resumeGame()
+                resumeGame();
             }
         });
         
@@ -1530,5 +1510,104 @@ public class GameScreen implements Screen {
         
         // Добавляем таблицу на сцену
         pauseStage.addActor(pauseTable);
+    }
+
+    /**
+     * Ставит игру на паузу
+     */
+    private void pauseGame() {
+        if (isPaused) return;
+        
+        isPaused = true;
+        
+        // Отладочное сообщение
+        Gdx.app.log("GameScreen", "Pausing game");
+        
+        // Останавливаем музыку
+        game.soundManager.pauseMusic();
+        
+        // Убеждаемся, что pauseStage инициализирован
+        if (pauseStage == null) {
+            createPauseUI();
+        }
+        
+        // Устанавливаем обработчик ввода на экран паузы
+        Gdx.input.setInputProcessor(pauseStage);
+    }
+    
+    /**
+     * Возобновляет игру после паузы
+     */
+    private void resumeGame() {
+        if (!isPaused) return;
+        
+        // Отладочное сообщение
+        Gdx.app.log("GameScreen", "Resuming game");
+        
+        isPaused = false;
+        
+        // Возвращаем обработку ввода к игре
+        Gdx.input.setInputProcessor(null);
+        
+        // Возобновляем музыку
+        game.soundManager.resumeMusic();
+    }
+
+    /**
+     * Отрисовывает все игровые объекты (корабль, астероиды, враги и т.д.)
+     */
+    private void drawGameObjects() {
+        // Корабль игрока
+        game.batch.draw(shipImage, ship.x, ship.y, ship.width, ship.height);
+        
+        // Астероиды
+        for (Rectangle asteroid : asteroids) {
+            game.batch.draw(asteroidImage, asteroid.x, asteroid.y, asteroid.width, asteroid.height);
+        }
+        
+        // Враги
+        for (Rectangle enemy : enemies) {
+            game.batch.draw(enemyImage, enemy.x, enemy.y, enemy.width, enemy.height);
+        }
+        
+        // Канистры с топливом
+        for (Rectangle fuelCanister : fuelCanisters) {
+            game.batch.draw(fuelImage, fuelCanister.x, fuelCanister.y, fuelCanister.width, fuelCanister.height);
+        }
+        
+        // Сердечки
+        for (Rectangle heart : hearts) {
+            game.batch.draw(heartImage, heart.x, heart.y, heart.width, heart.height);
+        }
+        
+        // Отрисовка бонусов
+        for (Powerup powerup : powerups) {
+            if (!powerup.active) {
+                // Отрисовываем только неактивированные бонусы
+                Texture powerupTexture = getPowerupTexture(powerup.type);
+                game.batch.draw(powerupTexture, powerup.bounds.x, powerup.bounds.y, 
+                               powerup.bounds.width, powerup.bounds.height);
+            }
+        }
+        
+        // Отрисовка эффекта щита, если он активен
+        if (shieldActive) {
+            // Увеличиваем размер щита относительно корабля
+            float shieldSize = SHIP_SIZE * 1.5f;
+            game.batch.setColor(0.4f, 0.8f, 1.0f, 0.6f);
+            game.batch.draw(shieldTexture, 
+                            ship.x - (shieldSize - ship.width) / 2, 
+                            ship.y - (shieldSize - ship.height) / 2, 
+                            shieldSize, shieldSize);
+            game.batch.setColor(1, 1, 1, 1);
+        }
+    }
+
+    /**
+     * Проверяет состояние аудио настроек и применяет их
+     */
+    private void checkAudioSettings() {
+        // Инициализация Stage для UI (только для экрана окончания игры)
+        gameOverStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
     }
 }

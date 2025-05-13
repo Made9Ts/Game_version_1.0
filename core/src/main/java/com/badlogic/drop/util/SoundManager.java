@@ -4,11 +4,13 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.utils.Disposable;
 
 /**
- * Класс для управления настройками звука и эффектов в игре
+ * Класс для управления настройками звука и эффектов в игре.
+ * Предоставляет методы для воспроизведения звуков, музыки и управления их настройками.
  */
-public class SoundManager {
+public class SoundManager implements Disposable {
     // Константы для хранения ключей в настройках
     private static final String PREFS_NAME = "space_courier_sound_settings";
     private static final String MUSIC_ENABLED_KEY = "music_enabled";
@@ -33,7 +35,7 @@ public class SoundManager {
     private Music currentMusic;
     
     /**
-     * Инициализирует менеджер звука и загружает сохраненные настройки
+     * Инициализирует менеджер звука и загружает сохраненные настройки.
      */
     public SoundManager() {
         preferences = Gdx.app.getPreferences(PREFS_NAME);
@@ -41,7 +43,7 @@ public class SoundManager {
     }
     
     /**
-     * Загружает настройки из Preferences
+     * Загружает настройки из Preferences.
      */
     private void loadSettings() {
         musicEnabled = preferences.getBoolean(MUSIC_ENABLED_KEY, true);
@@ -51,28 +53,35 @@ public class SoundManager {
     }
     
     /**
-     * Сохраняет настройки в Preferences
+     * Сохраняет настройки в Preferences.
      */
     private void saveSettings() {
+        preferences.putBoolean(MUSIC_ENABLED_KEY, musicEnabled);
+        preferences.putBoolean(SFX_ENABLED_KEY, sfxEnabled);
+        preferences.putFloat(MUSIC_VOLUME_KEY, musicVolume);
+        preferences.putFloat(SFX_VOLUME_KEY, sfxVolume);
         preferences.flush();
     }
     
     /**
-     * Проверяет, включена ли музыка
+     * Проверяет, включена ли музыка.
+     * @return true если музыка включена, иначе false
      */
     public boolean isMusicEnabled() {
         return musicEnabled;
     }
     
     /**
-     * Проверяет, включены ли звуковые эффекты
+     * Проверяет, включены ли звуковые эффекты.
+     * @return true если звуковые эффекты включены, иначе false
      */
     public boolean isSfxEnabled() {
         return sfxEnabled;
     }
     
     /**
-     * Включает или выключает музыку
+     * Включает или выключает музыку.
+     * @param enabled состояние музыки (вкл/выкл)
      */
     public void setMusicEnabled(boolean enabled) {
         musicEnabled = enabled;
@@ -88,7 +97,8 @@ public class SoundManager {
     }
     
     /**
-     * Включает или выключает звуковые эффекты
+     * Включает или выключает звуковые эффекты.
+     * @param enabled состояние звуковых эффектов (вкл/выкл)
      */
     public void setSfxEnabled(boolean enabled) {
         sfxEnabled = enabled;
@@ -97,7 +107,8 @@ public class SoundManager {
     }
     
     /**
-     * Переключает состояние музыки
+     * Переключает состояние музыки.
+     * @return новое состояние музыки
      */
     public boolean toggleMusic() {
         setMusicEnabled(!musicEnabled);
@@ -105,7 +116,8 @@ public class SoundManager {
     }
     
     /**
-     * Переключает состояние звуковых эффектов
+     * Переключает состояние звуковых эффектов.
+     * @return новое состояние звуковых эффектов
      */
     public boolean toggleSfx() {
         setSfxEnabled(!sfxEnabled);
@@ -113,7 +125,7 @@ public class SoundManager {
     }
     
     /**
-     * Устанавливает громкость музыки
+     * Устанавливает громкость музыки.
      * @param volume Значение от 0.0 до 1.0
      */
     public void setMusicVolume(float volume) {
@@ -127,14 +139,15 @@ public class SoundManager {
     }
     
     /**
-     * Возвращает текущую громкость музыки
+     * Возвращает текущую громкость музыки.
+     * @return громкость от 0.0 до 1.0
      */
     public float getMusicVolume() {
         return musicVolume;
     }
     
     /**
-     * Устанавливает громкость звуковых эффектов
+     * Устанавливает громкость звуковых эффектов.
      * @param volume Значение от 0.0 до 1.0
      */
     public void setSfxVolume(float volume) {
@@ -144,14 +157,17 @@ public class SoundManager {
     }
     
     /**
-     * Возвращает текущую громкость звуковых эффектов
+     * Возвращает текущую громкость звуковых эффектов.
+     * @return громкость от 0.0 до 1.0
      */
     public float getSfxVolume() {
         return sfxVolume;
     }
     
     /**
-     * Устанавливает текущую музыку и начинает ее проигрывать, если музыка включена
+     * Устанавливает текущую музыку и начинает ее проигрывать, если музыка включена.
+     * @param music музыка для воспроизведения
+     * @param looping должна ли музыка повторяться
      */
     public void setMusic(Music music, boolean looping) {
         if (currentMusic != null && currentMusic.isPlaying()) {
@@ -171,7 +187,8 @@ public class SoundManager {
     }
     
     /**
-     * Проигрывает звуковой эффект, если звуковые эффекты включены
+     * Проигрывает звуковой эффект, если звуковые эффекты включены.
+     * @param sound звук для воспроизведения
      * @return ID звукового эффекта или -1, если звук не проигрывается
      */
     public long playSound(Sound sound) {
@@ -182,7 +199,12 @@ public class SoundManager {
     }
     
     /**
-     * Проигрывает звуковой эффект с пользовательскими настройками
+     * Проигрывает звуковой эффект с пользовательскими настройками.
+     * @param sound звук для воспроизведения
+     * @param volume относительная громкость (0 до 1)
+     * @param pitch высота тона (0.5 до 2)
+     * @param pan баланс стерео (-1 (левый) до 1 (правый))
+     * @return ID звукового эффекта или -1, если звук не проигрывается
      */
     public long playSound(Sound sound, float volume, float pitch, float pan) {
         if (sfxEnabled && sound != null) {
@@ -192,7 +214,7 @@ public class SoundManager {
     }
     
     /**
-     * Останавливает текущую музыку
+     * Останавливает текущую музыку.
      */
     public void stopMusic() {
         if (currentMusic != null) {
@@ -201,7 +223,7 @@ public class SoundManager {
     }
     
     /**
-     * Приостанавливает текущую музыку
+     * Приостанавливает текущую музыку.
      */
     public void pauseMusic() {
         if (currentMusic != null && currentMusic.isPlaying()) {
@@ -210,11 +232,24 @@ public class SoundManager {
     }
     
     /**
-     * Возобновляет проигрывание текущей музыки, если музыка включена
+     * Возобновляет проигрывание текущей музыки, если музыка включена.
      */
     public void resumeMusic() {
         if (musicEnabled && currentMusic != null && !currentMusic.isPlaying()) {
             currentMusic.play();
+        }
+    }
+    
+    /**
+     * Освобождает ресурсы, используемые менеджером звука.
+     * Останавливает и освобождает текущую музыку.
+     */
+    @Override
+    public void dispose() {
+        if (currentMusic != null) {
+            currentMusic.stop();
+            currentMusic.dispose();
+            currentMusic = null;
         }
     }
 } 

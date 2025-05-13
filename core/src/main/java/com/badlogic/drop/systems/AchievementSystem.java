@@ -3,13 +3,15 @@ package com.badlogic.drop.systems;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.ObjectMap;
 
 /**
- * Система достижений для игры Space Courier
- * Отслеживает прогресс игрока и выдает награды за выполнение определенных условий
+ * Система достижений для игры Space Courier.
+ * Отслеживает прогресс игрока и выдает награды за выполнение определенных условий.
+ * Хранит состояние разблокированных достижений между сессиями игры.
  */
-public class AchievementSystem {
+public class AchievementSystem implements Disposable {
     
     // Состояние достижений
     private ObjectMap<String, Achievement> achievements;
@@ -26,6 +28,9 @@ public class AchievementSystem {
     
     // Предпочтения для сохранения достижений
     private Preferences prefs;
+    private static final String PREFS_NAME = "spacecourier_achievements";
+    private static final String UNLOCKED_SUFFIX = "_unlocked";
+    private static final String PROGRESS_SUFFIX = "_progress";
     
     /**
      * Класс для хранения информации о достижении
@@ -46,6 +51,13 @@ public class AchievementSystem {
             this.progress = 0;
             this.maxProgress = maxProgress;
         }
+        
+        /**
+         * Возвращает процент выполнения достижения от 0 до 1
+         */
+        public float getProgressPercent() {
+            return (float) progress / maxProgress;
+        }
     }
     
     /**
@@ -56,7 +68,7 @@ public class AchievementSystem {
         unlockedThisSession = new Array<String>();
         
         // Загружаем настройки
-        prefs = Gdx.app.getPreferences("spacecourier_achievements");
+        prefs = Gdx.app.getPreferences(PREFS_NAME);
         
         // Инициализируем достижения
         initializeAchievements();
@@ -139,8 +151,8 @@ public class AchievementSystem {
     private void loadProgress() {
         for (String id : achievements.keys()) {
             Achievement achievement = achievements.get(id);
-            achievement.unlocked = prefs.getBoolean(id + "_unlocked", false);
-            achievement.progress = prefs.getInteger(id + "_progress", 0);
+            achievement.unlocked = prefs.getBoolean(id + UNLOCKED_SUFFIX, false);
+            achievement.progress = prefs.getInteger(id + PROGRESS_SUFFIX, 0);
         }
     }
     
@@ -150,8 +162,8 @@ public class AchievementSystem {
     private void saveProgress() {
         for (String id : achievements.keys()) {
             Achievement achievement = achievements.get(id);
-            prefs.putBoolean(id + "_unlocked", achievement.unlocked);
-            prefs.putInteger(id + "_progress", achievement.progress);
+            prefs.putBoolean(id + UNLOCKED_SUFFIX, achievement.unlocked);
+            prefs.putInteger(id + PROGRESS_SUFFIX, achievement.progress);
         }
         prefs.flush();
     }
@@ -308,5 +320,16 @@ public class AchievementSystem {
      */
     public ObjectMap<String, Achievement> getAllAchievements() {
         return achievements;
+    }
+    
+    /**
+     * Освобождает ресурсы, используемые системой достижений.
+     * Сохраняет текущий прогресс перед завершением работы.
+     */
+    @Override
+    public void dispose() {
+        saveProgress();
+        achievements.clear();
+        unlockedThisSession.clear();
     }
 } 
