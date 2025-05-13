@@ -53,7 +53,7 @@ public class GameScreen implements Screen {
     private static final int SHIP_SPEED = 500;
     private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 3.1f; // Увеличено с 2.4f до 3.5f для более быстрого расхода
+    private static final float FUEL_CONSUMPTION = 2.8f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
     private static final int MAX_LIVES = 3;
 
     // Константы интервалов появления объектов
@@ -328,30 +328,159 @@ public class GameScreen implements Screen {
 
     private void spawnAsteroid() {
         Rectangle asteroid = new Rectangle();
-        asteroid.x = MathUtils.random(0, GAME_WIDTH - ASTEROID_SIZE);
-        asteroid.y = GAME_HEIGHT; // Сверху экрана
         asteroid.width = ASTEROID_SIZE;
         asteroid.height = ASTEROID_SIZE;
+
+        // Максимальное количество попыток найти свободное место
+        int maxAttempts = 10;
+        boolean hasOverlap = true;
+
+        // Пытаемся найти место без пересечений
+        for (int attempt = 0; attempt < maxAttempts && hasOverlap; attempt++) {
+            // Задаем случайную позицию X
+            asteroid.x = MathUtils.random(0, GAME_WIDTH - ASTEROID_SIZE);
+            asteroid.y = GAME_HEIGHT; // Сверху экрана
+
+            // Проверяем пересечения с другими астероидами
+            hasOverlap = false;
+            for (Rectangle existingAsteroid : asteroids) {
+                // Допускаем небольшое наложение (80% от размера)
+                float minDistance = ASTEROID_SIZE * 0.8f;
+
+                // Проверяем расстояние между центрами объектов
+                float dx = (existingAsteroid.x + existingAsteroid.width/2) - (asteroid.x + asteroid.width/2);
+                float dy = (existingAsteroid.y + existingAsteroid.height/2) - (asteroid.y + asteroid.height/2);
+                float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (distance < minDistance) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+        }
+
+        // Добавляем астероид
         asteroids.add(asteroid);
         lastAsteroidTime = TimeUtils.nanoTime();
     }
 
     private void spawnEnemy() {
         Rectangle enemy = new Rectangle();
-        enemy.x = MathUtils.random(0, GAME_WIDTH - ENEMY_SIZE);
-        enemy.y = GAME_HEIGHT; // Сверху экрана
         enemy.width = ENEMY_SIZE;
         enemy.height = ENEMY_SIZE;
+
+        // Максимальное количество попыток найти свободное место
+        int maxAttempts = 10;
+        boolean hasOverlap = true;
+
+        // Пытаемся найти место без пересечений
+        for (int attempt = 0; attempt < maxAttempts && hasOverlap; attempt++) {
+            // Задаем случайную позицию X
+            enemy.x = MathUtils.random(0, GAME_WIDTH - ENEMY_SIZE);
+            enemy.y = GAME_HEIGHT; // Сверху экрана
+
+            // Проверяем пересечения с астероидами
+            hasOverlap = false;
+
+            // Проверка пересечения с другими врагами
+            for (Rectangle existingEnemy : enemies) {
+                // Допускаем небольшое наложение (80% от размера)
+                float minDistance = ENEMY_SIZE * 0.8f;
+
+                // Проверяем расстояние между центрами объектов
+                float dx = (existingEnemy.x + existingEnemy.width/2) - (enemy.x + enemy.width/2);
+                float dy = (existingEnemy.y + existingEnemy.height/2) - (enemy.y + enemy.height/2);
+                float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (distance < minDistance) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            // Если нет пересечения с врагами, проверяем пересечения с астероидами
+            if (!hasOverlap) {
+                for (Rectangle asteroid : asteroids) {
+                    // Допускаем небольшое наложение (70% от суммы размеров)
+                    float minDistance = (ENEMY_SIZE + ASTEROID_SIZE) * 0.35f;
+
+                    // Проверяем расстояние между центрами объектов
+                    float dx = (asteroid.x + asteroid.width/2) - (enemy.x + enemy.width/2);
+                    float dy = (asteroid.y + asteroid.height/2) - (enemy.y + enemy.height/2);
+                    float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < minDistance) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Добавляем врага
         enemies.add(enemy);
         lastEnemyTime = TimeUtils.nanoTime();
     }
 
     private void spawnFuelCanister() {
         Rectangle fuelCanister = new Rectangle();
-        fuelCanister.x = MathUtils.random(0, GAME_WIDTH - FUEL_SIZE);
-        fuelCanister.y = GAME_HEIGHT; // Сверху экрана
         fuelCanister.width = FUEL_SIZE;
         fuelCanister.height = FUEL_SIZE;
+
+        // Максимальное количество попыток найти свободное место
+        int maxAttempts = 15; // Больше попыток, так как топливо важнее
+        boolean hasOverlap = true;
+
+        // Пытаемся найти место без пересечений
+        for (int attempt = 0; attempt < maxAttempts && hasOverlap; attempt++) {
+            // Задаем случайную позицию X
+            fuelCanister.x = MathUtils.random(0, GAME_WIDTH - FUEL_SIZE);
+            fuelCanister.y = GAME_HEIGHT; // Сверху экрана
+
+            hasOverlap = false;
+
+            // Проверка пересечения с астероидами
+            for (Rectangle asteroid : asteroids) {
+                // Допускаем небольшое наложение
+                float minDistance = (FUEL_SIZE + ASTEROID_SIZE) * 0.4f;
+
+                // Проверяем расстояние между центрами объектов
+                float dx = (asteroid.x + asteroid.width/2) - (fuelCanister.x + fuelCanister.width/2);
+                float dy = (asteroid.y + asteroid.height/2) - (fuelCanister.y + fuelCanister.height/2);
+                float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (distance < minDistance) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            // Если нет пересечения с астероидами, проверяем пересечения с врагами
+            if (!hasOverlap) {
+                for (Rectangle enemy : enemies) {
+                    // Допускаем небольшое наложение
+                    float minDistance = (FUEL_SIZE + ENEMY_SIZE) * 0.4f;
+
+                    // Проверяем расстояние между центрами объектов
+                    float dx = (enemy.x + enemy.width/2) - (fuelCanister.x + fuelCanister.width/2);
+                    float dy = (enemy.y + enemy.height/2) - (fuelCanister.y + fuelCanister.height/2);
+                    float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < minDistance) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+            }
+
+            // Если слишком много попыток безуспешны, уменьшаем требования к расстоянию
+            if (attempt > maxAttempts * 0.7f && hasOverlap) {
+                // На последних попытках разрешаем размещать с минимальными ограничениями
+                hasOverlap = false;
+            }
+        }
+
+        // Добавляем канистру с топливом
         fuelCanisters.add(fuelCanister);
         lastFuelTime = TimeUtils.nanoTime();
     }
@@ -361,10 +490,81 @@ public class GameScreen implements Screen {
      */
     private void spawnHeart() {
         Rectangle heart = new Rectangle();
-        heart.x = MathUtils.random(0, GAME_WIDTH - HEART_SIZE);
-        heart.y = GAME_HEIGHT; // Сверху экрана
         heart.width = HEART_SIZE;
         heart.height = HEART_SIZE;
+
+        // Максимальное количество попыток найти свободное место
+        int maxAttempts = 15; // Больше попыток, так как сердечки важны
+        boolean hasOverlap = true;
+
+        // Пытаемся найти место без пересечений
+        for (int attempt = 0; attempt < maxAttempts && hasOverlap; attempt++) {
+            // Задаем случайную позицию X
+            heart.x = MathUtils.random(0, GAME_WIDTH - HEART_SIZE);
+            heart.y = GAME_HEIGHT; // Сверху экрана
+
+            hasOverlap = false;
+
+            // Проверка пересечения с астероидами
+            for (Rectangle asteroid : asteroids) {
+                // Допускаем небольшое наложение
+                float minDistance = (HEART_SIZE + ASTEROID_SIZE) * 0.4f;
+
+                // Проверяем расстояние между центрами объектов
+                float dx = (asteroid.x + asteroid.width/2) - (heart.x + heart.width/2);
+                float dy = (asteroid.y + asteroid.height/2) - (heart.y + heart.height/2);
+                float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (distance < minDistance) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            // Если нет пересечения с астероидами, проверяем пересечения с врагами
+            if (!hasOverlap) {
+                for (Rectangle enemy : enemies) {
+                    // Допускаем небольшое наложение
+                    float minDistance = (HEART_SIZE + ENEMY_SIZE) * 0.4f;
+
+                    // Проверяем расстояние между центрами объектов
+                    float dx = (enemy.x + enemy.width/2) - (heart.x + heart.width/2);
+                    float dy = (enemy.y + enemy.height/2) - (heart.y + heart.height/2);
+                    float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < minDistance) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+            }
+
+            // Проверка пересечения с топливом
+            if (!hasOverlap) {
+                for (Rectangle fuel : fuelCanisters) {
+                    // Минимальное расстояние между центрами
+                    float minDistance = (HEART_SIZE + FUEL_SIZE) * 0.5f;
+
+                    // Проверяем расстояние между центрами объектов
+                    float dx = (fuel.x + fuel.width/2) - (heart.x + heart.width/2);
+                    float dy = (fuel.y + fuel.height/2) - (heart.y + heart.height/2);
+                    float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < minDistance) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+            }
+
+            // Если слишком много попыток безуспешны, уменьшаем требования к расстоянию
+            if (attempt > maxAttempts * 0.7f && hasOverlap) {
+                // На последних попытках разрешаем размещать с минимальными ограничениями
+                hasOverlap = false;
+            }
+        }
+
+        // Добавляем сердечко
         hearts.add(heart);
         lastHeartTime = TimeUtils.nanoTime();
     }
@@ -1145,10 +1345,60 @@ public class GameScreen implements Screen {
         PowerupType[] types = PowerupType.values();
         PowerupType type = types[MathUtils.random(types.length - 1)];
 
-        // Создаем бонус в случайном месте экрана
-        float x = MathUtils.random(0, GAME_WIDTH - POWERUP_SIZE);
-        float y = GAME_HEIGHT; // Сверху экрана
+        // Координаты для размещения
+        float x = 0;
+        float y = GAME_HEIGHT;
 
+        // Максимальное количество попыток найти свободное место
+        int maxAttempts = 15;
+        boolean hasOverlap = true;
+
+        // Пытаемся найти место без пересечений
+        for (int attempt = 0; attempt < maxAttempts && hasOverlap; attempt++) {
+            // Задаем случайную позицию X
+            x = MathUtils.random(0, GAME_WIDTH - POWERUP_SIZE);
+            y = GAME_HEIGHT; // Сверху экрана
+
+            hasOverlap = false;
+
+            // Проверка пересечения с астероидами
+            for (Rectangle asteroid : asteroids) {
+                // Допускаем небольшое наложение
+                float minDistance = (POWERUP_SIZE + ASTEROID_SIZE) * 0.4f;
+
+                // Проверяем расстояние между центрами объектов
+                float dx = (asteroid.x + asteroid.width/2) - (x + POWERUP_SIZE/2);
+                float dy = (asteroid.y + asteroid.height/2) - (y + POWERUP_SIZE/2);
+                float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (distance < minDistance) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            // Проверка пересечения с врагами
+            if (!hasOverlap) {
+                for (Rectangle enemy : enemies) {
+                    float minDistance = (POWERUP_SIZE + ENEMY_SIZE) * 0.4f;
+                    float dx = (enemy.x + enemy.width/2) - (x + POWERUP_SIZE/2);
+                    float dy = (enemy.y + enemy.height/2) - (y + POWERUP_SIZE/2);
+                    float distance = (float)Math.sqrt(dx*dx + dy*dy);
+
+                    if (distance < minDistance) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+            }
+
+            // На последних попытках разрешаем размещать с минимальными проверками
+            if (attempt > maxAttempts * 0.7f && hasOverlap) {
+                hasOverlap = false;
+            }
+        }
+
+        // Создаем бонус в найденном месте
         powerups.add(new Powerup(x, y, type));
     }
 
