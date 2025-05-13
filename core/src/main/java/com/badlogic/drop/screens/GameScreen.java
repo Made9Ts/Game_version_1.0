@@ -55,7 +55,7 @@ public class GameScreen implements Screen {
     private static final int SHIP_SPEED = 500;
     private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 1f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
+    private static final float FUEL_CONSUMPTION = 5.0f; // Увеличено с 2.4f до 2.8f для Ыболее быстрого расхода
     private static final int MAX_LIVES = 3;
     private static final float PLAYER_PROJECTILE_SPEED = 400f; // Скорость снаряда игрока
     private static final long PLAYER_SHOOT_COOLDOWN = 500000000L; // Задержка между выстрелами игрока (0.5 сек)
@@ -112,6 +112,12 @@ public class GameScreen implements Screen {
     private boolean achievementNotificationActive;
     private float achievementNotificationTime;
     private String achievementNotificationText;
+
+    // Оповещение о низком уровне топлива
+    private boolean lowFuelWarningActive;
+    private float lowFuelWarningTime;
+    private static final float LOW_FUEL_WARNING_DURATION = 2.0f;
+    private static final float LOW_FUEL_THRESHOLD = 20.0f; // 20%
 
     // Состояние бонусов
     private boolean shieldActive;
@@ -220,29 +226,29 @@ public class GameScreen implements Screen {
         Rectangle bounds;
         float speedX;
         float speedY;
-        
+
         /**
          * Создает новый снаряд босса в указанной позиции
          */
         BossProjectile(float x, float y) {
             this.bounds = new Rectangle(x, y, BOSS_PROJECTILE_SIZE, BOSS_PROJECTILE_SIZE);
-            
+
             // Направляем снаряд в сторону игрока
             float dx = ship.x + ship.width/2 - x;
             float dy = ship.y + ship.height/2 - y;
-            
+
             // Нормализуем вектор
             float length = (float)Math.sqrt(dx*dx + dy*dy);
             if (length != 0) {
                 dx /= length;
                 dy /= length;
             }
-            
+
             // Устанавливаем скорость снаряда
             this.speedX = dx * BOSS_PROJECTILE_SPEED;
             this.speedY = dy * BOSS_PROJECTILE_SPEED;
         }
-        
+
         /**
          * Обновляет позицию снаряда
          */
@@ -250,12 +256,12 @@ public class GameScreen implements Screen {
             bounds.x += speedX * delta;
             bounds.y += speedY * delta;
         }
-        
+
         /**
          * Проверяет, находится ли снаряд за пределами экрана
          */
         boolean isOutOfScreen() {
-            return bounds.x < -bounds.width || bounds.x > GAME_WIDTH || 
+            return bounds.x < -bounds.width || bounds.x > GAME_WIDTH ||
                    bounds.y < -bounds.height || bounds.y > GAME_HEIGHT;
         }
     }
@@ -265,21 +271,21 @@ public class GameScreen implements Screen {
      */
     private class PlayerProjectile {
         Rectangle bounds;
-        
+
         /**
          * Создает новый снаряд игрока в указанной позиции
          */
         PlayerProjectile(float x, float y) {
             this.bounds = new Rectangle(x, y, PLAYER_PROJECTILE_SIZE, PLAYER_PROJECTILE_SIZE);
         }
-        
+
         /**
          * Обновляет позицию снаряда (движение вверх)
          */
         void update(float delta) {
             bounds.y += PLAYER_PROJECTILE_SPEED * delta;
         }
-        
+
         /**
          * Проверяет, находится ли снаряд за пределами экрана
          */
@@ -372,7 +378,7 @@ public class GameScreen implements Screen {
 
         bossProjectileTexture = new Texture(Gdx.files.internal("boss_projectile.png"));
         bossProjectileTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        
+
         playerProjectileTexture = new Texture(Gdx.files.internal("player_projectile.png"));
         playerProjectileTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
@@ -759,6 +765,11 @@ public class GameScreen implements Screen {
             if (achievementNotificationActive) {
                 drawAchievementNotification(delta);
             }
+
+            // Если активно предупреждение о низком уровне топлива, отображаем его
+            if (lowFuelWarningActive) {
+                drawLowFuelWarning(delta);
+            }
         }
 
         game.batch.end();
@@ -817,29 +828,32 @@ public class GameScreen implements Screen {
         // Отображение иконки топлива с процентным значением в нижнем левом углу
         float fuelIconSize = 35; // Размер иконки топлива
         float fuelTextOffsetX = fuelIconSize + 10; // Отступ для текста процента
-        float fuelY = 40; // Позиция Y для топлива
-        
-        // Рисуем иконку топлива
+        float fuelY = 40;
+
+        // Отрисовываем иконку топлива
         game.batch.draw(fuelImage, 20, fuelY, fuelIconSize, fuelIconSize);
-        
-        // Меняем цвет текста в зависимости от уровня топлива
+
+        // Определяем цвет для текста процента топлива (зеленый -> желтый -> красный)
         if (fuelPercent > 60) {
-            font.setColor(0.2f, 0.8f, 0.2f, 1.0f); // Зеленый для безопасного уровня
+            font.setColor(0.2f, 0.8f, 0.2f, 1.0f); // Зеленый для высокого уровня топлива
         } else if (fuelPercent > 30) {
-            font.setColor(0.8f, 0.8f, 0.2f, 1.0f); // Желтый для среднего уровня
+            font.setColor(0.8f, 0.8f, 0.2f, 1.0f); // Желтый для среднего уровня топлива
         } else {
-            font.setColor(0.8f, 0.2f, 0.2f, 1.0f); // Красный для опасного уровня
+            font.setColor(0.8f, 0.2f, 0.2f, 1.0f); // Красный для низкого уровня топлива
         }
 
-        // Рисуем процент топлива рядом с иконкой
+        // Отрисовываем текст процента топлива
         font.draw(game.batch, fuelPercent + "%", 20 + fuelTextOffsetX, fuelY + fuelIconSize/2 + 5);
-        
-        // Отображение оставшихся жизней в виде иконок сердечек в нижнем левом углу
-        float heartIconSize = 40; // Увеличенный размер иконки сердечка
-        float heartSpacing = 10; // Расстояние между сердечками
-        float heartsStartX = 20; // Начальная позиция X для сердечек (слева)
-        float heartsY = 80; // Позиция Y для сердечек (нижняя часть экрана)
-        
+
+        // Возвращаем цвет шрифта к белому
+        font.setColor(1, 1, 1, 1);
+
+        // Отображение сердечек для жизней (вместо числа)
+        float heartIconSize = 35; // Размер сердечка
+        float heartSpacing = 5; // Расстояние между сердечками
+        float heartsStartX = 20; // Начальная X-координата для сердечек
+        float heartsY = 85; // Y-координата для сердечек (над индикатором топлива)
+
         // Отрисовка сердечек в соответствии с числом жизней
         for (int i = 0; i < MAX_LIVES; i++) {
             if (i < lives) {
@@ -851,21 +865,9 @@ public class GameScreen implements Screen {
             }
             game.batch.draw(heartImage, heartsStartX + i * (heartIconSize + heartSpacing), heartsY, heartIconSize, heartIconSize);
         }
-        
+
         // Возвращаем нормальный цвет
         game.batch.setColor(1, 1, 1, 1);
-        font.setColor(1, 1, 1, 1);
-
-        // Показываем текущее комбо, если оно есть
-        int comboCount = difficultySystem.getComboCount();
-        if (comboCount > 0) {
-            // Определяем цвет комбо: от желтого к красному по мере роста
-            float comboRatio = Math.min(1.0f, comboCount / 20.0f);
-            font.setColor(1.0f, 1.0f - comboRatio * 0.7f, 0.3f, 1.0f);
-            font.draw(game.batch, "Combo: x" + comboCount, 20, GAME_HEIGHT - 240);
-        }
-
-        // Возвращаем цвет шрифта к белому
         font.setColor(1, 1, 1, 1);
 
         // Отображение активных бонусов
@@ -992,7 +994,14 @@ public class GameScreen implements Screen {
         handleInput(delta);
 
         // Расход топлива
+        float prevFuel = fuel;
         fuel -= FUEL_CONSUMPTION * delta;
+
+        // Проверка на низкий уровень топлива
+        if (fuel <= MAX_FUEL * (LOW_FUEL_THRESHOLD / 100f) && prevFuel > MAX_FUEL * (LOW_FUEL_THRESHOLD / 100f)) {
+            showLowFuelWarning();
+        }
+
         if (fuel <= 0) {
             loseLife();
             fuel = MAX_FUEL / 2; // Дадим половину бака при потере жизни
@@ -1057,10 +1066,10 @@ public class GameScreen implements Screen {
 
         // Обновляет состояние босса
         updateBoss(delta);
-        
+
         // Обновляем снаряды босса
         updateBossProjectiles(delta);
-        
+
         // Обновляем снаряды игрока
         updatePlayerProjectiles(delta);
     }
@@ -1108,26 +1117,26 @@ public class GameScreen implements Screen {
         // Проверка на стрельбу (только при битве с боссом)
         if (bossActive && !isPaused && !gameOver) {
             boolean shouldShoot = false;
-            
+
             // Проверка удержания пальца на экране (непрерывная стрельба)
             if (Gdx.input.isTouched()) {
                 // Получаем позицию касания
                 Vector3 touchPos = new Vector3();
                 touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
                 camera.unproject(touchPos);
-                
+
                 // Проверяем, что касание не на кнопке паузы
                 if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
                     touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
                     shouldShoot = true;
                 }
             }
-            
+
             // Проверка нажатия пробела (непрерывная стрельба)
             if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
                 shouldShoot = true;
             }
-            
+
             // Если нужно стрелять и прошло достаточно времени с последнего выстрела
             if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
                 playerShoot();
@@ -1203,7 +1212,7 @@ public class GameScreen implements Screen {
         if (ship.y < 0) ship.y = 0;
         if (ship.y > GAME_HEIGHT - SHIP_SIZE) ship.y = GAME_HEIGHT - SHIP_SIZE;
     }
-    
+
     /**
      * Игрок выполняет выстрел
      */
@@ -1211,19 +1220,19 @@ public class GameScreen implements Screen {
         // Создаем снаряд над кораблем игрока
         float projectileX = ship.x + ship.width/2 - PLAYER_PROJECTILE_SIZE/2;
         float projectileY = ship.y + ship.height;
-        
+
         // Добавляем снаряд в коллекцию
         playerProjectiles.add(new PlayerProjectile(projectileX, projectileY));
-        
+
         // Запоминаем время выстрела
         lastPlayerShootTime = TimeUtils.nanoTime();
-        
+
         // Звук выстрела
         if (game.soundManager.isSfxEnabled()) {
             collectSound.play(0.3f);
         }
     }
-    
+
     /**
      * Обновляет снаряды игрока
      */
@@ -1233,33 +1242,33 @@ public class GameScreen implements Screen {
             playerProjectiles.clear();
             return;
         }
-        
+
         // Обрабатываем каждый снаряд
         for (Iterator<PlayerProjectile> iter = playerProjectiles.iterator(); iter.hasNext();) {
             PlayerProjectile projectile = iter.next();
-            
+
             // Обновляем позицию снаряда
             projectile.update(delta);
-            
+
             // Проверяем столкновение с боссом
             if (boss != null && projectile.bounds.overlaps(boss)) {
                 // Наносим урон боссу
                 damageBoss();
-                
+
                 // Удаляем снаряд при попадании
                 iter.remove();
-                
+
                 // Добавляем очки за попадание
                 addScore(50);
-                
+
                 // Воспроизводим звук попадания
                 if (game.soundManager.isSfxEnabled()) {
                     explosionSound.play(0.3f);
                 }
-                
+
                 continue;
             }
-            
+
             // Удаляем снаряды за пределами экрана
             if (projectile.isOutOfScreen()) {
                 iter.remove();
@@ -1411,7 +1420,7 @@ public class GameScreen implements Screen {
         if (lives <= 0) {
             gameOver = true;
             gameMusic.stop();
-            
+
             // Очищаем снаряды босса и игрока при проигрыше
             bossProjectiles.clear();
             playerProjectiles.clear();
@@ -1486,7 +1495,7 @@ public class GameScreen implements Screen {
         collectSound.dispose();
         explosionSound.dispose();
         gameMusic.dispose();
-        
+
         // Освобождаем ресурсы UI
         if (gameOverStage != null) gameOverStage.dispose();
         if (gameOverSkin != null) gameOverSkin.dispose();
@@ -1888,7 +1897,9 @@ public class GameScreen implements Screen {
         achievementNotificationText = text;
     }
 
-    // Отрисовка уведомления о достижении
+    /**
+     * Отрисовка уведомления о достижении
+     */
     private void drawAchievementNotification(float delta) {
         // Обновляем таймер уведомления
         achievementNotificationTime += delta;
@@ -1910,24 +1921,35 @@ public class GameScreen implements Screen {
             alpha = 1.0f;
         }
 
-        // Отрисовка полупрозрачного фона
-        game.batch.setColor(0, 0, 0, alpha * 0.7f);
-        game.batch.draw(backgroundImage, 0, GAME_HEIGHT - 180, GAME_WIDTH, 100);
+        // Вычисляем размеры оповещения относительно экрана и добавляем отступы
+        float notificationHeight = GAME_HEIGHT * 0.1f; // 10% от высоты экрана (уменьшено с 12%)
+        float notificationWidth = GAME_WIDTH * 0.8f; // 80% от ширины экрана
+        float notificationY = GAME_HEIGHT - notificationHeight - GAME_HEIGHT * 0.05f; // 5% отступ сверху (увеличен с 2%)
+        float notificationX = (GAME_WIDTH - notificationWidth) / 2; // центрирование по горизонтали
+
+        // Отрисовка черного полупрозрачного фона
+        game.batch.setColor(0, 0, 0, 0.7f * alpha);
+        game.batch.draw(backgroundImage, notificationX, notificationY, notificationWidth, notificationHeight);
 
         // Получаем шрифт для уведомления
         BitmapFont notificationFont = game.fontManager.getUIFont();
         notificationFont.setColor(1, 1, 0.3f, alpha); // Желтоватый цвет для достижений
 
+        // Масштабируем шрифт относительно размера экрана (увеличенный)
+        float fontScale = GAME_WIDTH / 1200f; // Увеличенный масштаб шрифта (было 1500f)
+        notificationFont.getData().setScale(fontScale);
+
         // Измеряем ширину текста для центрирования
         GlyphLayout layout = new GlyphLayout(notificationFont, achievementNotificationText);
-        float x = (GAME_WIDTH - layout.width) / 2;
-        float y = GAME_HEIGHT - 130;
+        float x = notificationX + (notificationWidth - layout.width) / 2;
+        float y = notificationY + (notificationHeight + layout.height) / 2;
 
         // Отрисовка текста уведомления
         notificationFont.draw(game.batch, achievementNotificationText, x, y);
 
-        // Сбрасываем цвет
+        // Сбрасываем цвет и масштаб шрифта
         notificationFont.setColor(1, 1, 1, 1);
+        notificationFont.getData().setScale(1f);
         game.batch.setColor(1, 1, 1, 1);
     }
 
@@ -2135,16 +2157,16 @@ public class GameScreen implements Screen {
                                powerup.bounds.width, powerup.bounds.height);
             }
         }
-        
+
         // Отрисовка снарядов босса
         for (BossProjectile projectile : bossProjectiles) {
-            game.batch.draw(bossProjectileTexture, projectile.bounds.x, projectile.bounds.y, 
+            game.batch.draw(bossProjectileTexture, projectile.bounds.x, projectile.bounds.y,
                            projectile.bounds.width, projectile.bounds.height);
         }
-        
+
         // Отрисовка снарядов игрока
         for (PlayerProjectile projectile : playerProjectiles) {
-            game.batch.draw(playerProjectileTexture, projectile.bounds.x, projectile.bounds.y, 
+            game.batch.draw(playerProjectileTexture, projectile.bounds.x, projectile.bounds.y,
                            projectile.bounds.width, projectile.bounds.height);
         }
 
@@ -2254,7 +2276,7 @@ public class GameScreen implements Screen {
             // Обновляем время последней атаки
             lastBossAttackTime = TimeUtils.nanoTime();
         }
-        
+
         // Стрельба снарядами (отдельно от сброса астероидов)
         if (TimeUtils.nanoTime() - lastBossAttackTime > BOSS_SHOOT_INTERVAL) {
             // Стреляем в игрока
@@ -2389,10 +2411,10 @@ public class GameScreen implements Screen {
         // Вычисляем процент здоровья босса
         float healthPercentage = (float) bossHealth / BOSS_HEALTH_MAX;
         int healthPercent = (int)(healthPercentage * 100);
-        
+
         // Формируем текст для отображения
         String healthText = "BOSS: " + healthPercent + "%";
-        
+
         // Выбираем цвет в зависимости от оставшегося здоровья
         if (healthPercent > 60) {
             font.setColor(0.2f, 0.8f, 0.2f, 1.0f); // Зеленый для высокого здоровья
@@ -2401,14 +2423,14 @@ public class GameScreen implements Screen {
         } else {
             font.setColor(0.8f, 0.2f, 0.2f, 1.0f); // Красный для низкого здоровья
         }
-        
+
         // Измеряем ширину текста для центрирования
         GlyphLayout layout = new GlyphLayout(font, healthText);
         float textX = GAME_WIDTH / 2 - layout.width / 2;
-        
+
         // Отрисовываем текст здоровья босса
         font.draw(game.batch, healthText, textX, GAME_HEIGHT - 20);
-        
+
         // Возвращаем цвет шрифта к белому
         font.setColor(1, 1, 1, 1);
     }
@@ -2420,10 +2442,10 @@ public class GameScreen implements Screen {
         // Обрабатываем каждый снаряд
         for (Iterator<BossProjectile> iter = bossProjectiles.iterator(); iter.hasNext();) {
             BossProjectile projectile = iter.next();
-            
+
             // Обновляем позицию снаряда
             projectile.update(delta);
-            
+
             // Проверяем столкновение с кораблем
             if (projectile.bounds.overlaps(ship)) {
                 // Если нет щита, наносим урон
@@ -2431,18 +2453,18 @@ public class GameScreen implements Screen {
                     loseLife();
                     difficultySystem.registerFailure(); // Регистрируем неудачу
                 }
-                
+
                 // Удаляем снаряд при попадании
                 iter.remove();
-                
+
                 // Воспроизводим звук взрыва если звуковые эффекты включены
                 if (game.soundManager.isSfxEnabled()) {
                     explosionSound.play(0.5f);
                 }
-                
+
                 continue;
             }
-            
+
             // Удаляем снаряды за пределами экрана
             if (projectile.isOutOfScreen()) {
                 iter.remove();
@@ -2457,13 +2479,85 @@ public class GameScreen implements Screen {
         // Создаем снаряд под боссом
         float projectileX = boss.x + boss.width/2 - BOSS_PROJECTILE_SIZE/2;
         float projectileY = boss.y - BOSS_PROJECTILE_SIZE;
-        
+
         // Добавляем снаряд в коллекцию
         bossProjectiles.add(new BossProjectile(projectileX, projectileY));
-        
+
         // Звук выстрела
         if (game.soundManager.isSfxEnabled()) {
             explosionSound.play(0.2f);
         }
+    }
+
+    /**
+     * Активирует предупреждение о низком уровне топлива
+     */
+    private void showLowFuelWarning() {
+        lowFuelWarningActive = true;
+        lowFuelWarningTime = 0;
+    }
+
+    /**
+     * Отрисовывает предупреждение о низком уровне топлива
+     */
+    private void drawLowFuelWarning(float delta) {
+        // Обновляем таймер предупреждения
+        lowFuelWarningTime += delta;
+        
+        // Проверяем, завершилось ли отображение предупреждения
+        if (lowFuelWarningTime >= LOW_FUEL_WARNING_DURATION) {
+            lowFuelWarningActive = false;
+            return;
+        }
+        
+        // Расчет пульсирующей прозрачности для привлечения внимания
+        float blinkValue = (float)Math.sin(lowFuelWarningTime * 10) * 0.3f + 0.7f;
+        
+        // Вычисляем размеры оповещения относительно экрана с отступами
+        float warningHeight = GAME_HEIGHT * 0.09f; // 9% от высоты экрана (уменьшено с 10%)
+        float warningWidth = GAME_WIDTH * 0.7f; // 70% от ширины экрана
+        float warningY = GAME_HEIGHT * 0.18f; // 18% от нижней части экрана (увеличено с 15%)
+        float warningX = (GAME_WIDTH - warningWidth) / 2; // центрирование по горизонтали
+        
+        // Отрисовка черного полупрозрачного фона
+        game.batch.setColor(0, 0, 0, blinkValue * 0.8f);
+        game.batch.draw(backgroundImage, warningX, warningY, warningWidth, warningHeight);
+        
+        // Добавляем красную рамку для привлечения внимания
+        float borderThickness = GAME_HEIGHT * 0.008f; // Толщина рамки (уменьшена с 0.01f)
+        game.batch.setColor(0.9f, 0.1f, 0.1f, blinkValue);
+        
+        // Верхняя граница
+        game.batch.draw(backgroundImage, warningX, warningY + warningHeight - borderThickness, warningWidth, borderThickness);
+        // Нижняя граница
+        game.batch.draw(backgroundImage, warningX, warningY, warningWidth, borderThickness);
+        // Левая граница
+        game.batch.draw(backgroundImage, warningX, warningY, borderThickness, warningHeight);
+        // Правая граница
+        game.batch.draw(backgroundImage, warningX + warningWidth - borderThickness, warningY, borderThickness, warningHeight);
+        
+        // Получаем шрифт для предупреждения
+        BitmapFont warningFont = game.fontManager.getUIFont();
+        warningFont.setColor(1, 0.3f, 0.3f, blinkValue); // Красноватый текст с пульсацией
+        
+        // Масштабируем шрифт относительно размера экрана (увеличенный)
+        float fontScale = GAME_WIDTH / 1100f; // Увеличенный масштаб шрифта (было 1500f)
+        warningFont.getData().setScale(fontScale);
+        
+        // Текст предупреждения
+        String warningText = "ВНИМАНИЕ! НИЗКИЙ УРОВЕНЬ ТОПЛИВА!";
+        
+        // Измеряем ширину текста для центрирования
+        GlyphLayout layout = new GlyphLayout(warningFont, warningText);
+        float x = warningX + (warningWidth - layout.width) / 2;
+        float y = warningY + (warningHeight + layout.height) / 2;
+        
+        // Отрисовка текста предупреждения
+        warningFont.draw(game.batch, warningText, x, y);
+        
+        // Сбрасываем цвет и масштаб шрифта
+        warningFont.setColor(1, 1, 1, 1);
+        warningFont.getData().setScale(1f);
+        game.batch.setColor(1, 1, 1, 1);
     }
 }
