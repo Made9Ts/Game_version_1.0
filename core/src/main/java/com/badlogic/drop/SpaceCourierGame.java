@@ -85,11 +85,18 @@ public class SpaceCourierGame extends Game {
 	}
 	
 	/**
-	 * Устанавливает Firebase интерфейс и инициализирует систему достижений с его поддержкой
+	 * Устанавливает интерфейс Firebase
 	 * @param firebaseInterface Реализация интерфейса Firebase
 	 */
 	public void setFirebaseInterface(FirebaseInterface firebaseInterface) {
 		this.firebaseInterface = firebaseInterface;
+		
+		// Проверяем, что Gdx.app инициализирован
+		if (Gdx.app == null) {
+			// Не можем использовать Gdx.app.error, так как Gdx.app == null
+			System.err.println("SpaceCourierGame: Gdx.app не инициализирован! Firebase будет установлен позже.");
+			return;
+		}
 		
 		// Инициализируем систему достижений с Firebase
 		if (this.firebaseInterface != null) {
@@ -175,6 +182,7 @@ public class SpaceCourierGame extends Game {
 			// Отвязываем пользователя от системы достижений
 			if (achievementSystem != null) {
 				Gdx.app.log("SpaceCourierGame", "Отвязываем пользователя от системы достижений");
+				// Устанавливаем userId как null, чтобы сбросить достижения
 				achievementSystem.setUser(null);
 			}
 			

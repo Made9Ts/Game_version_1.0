@@ -86,6 +86,14 @@ public class AchievementSystem implements Disposable {
         achievements = new ObjectMap<String, Achievement>();
         unlockedThisSession = new Array<String>();
         
+        // Проверяем, что Gdx.app инициализирован
+        if (Gdx.app == null) {
+            System.err.println("AchievementSystem: Gdx.app не инициализирован!");
+            // Инициализируем только достижения без загрузки прогресса
+            initializeAchievements();
+            return;
+        }
+        
         // Загружаем настройки
         prefs = Gdx.app.getPreferences(PREFS_NAME);
         
@@ -121,7 +129,7 @@ public class AchievementSystem implements Disposable {
         
         // Если у нас был предыдущий пользователь, сохраняем его достижения
         if (isUsingFirebase && this.userId != null) {
-            // Сохраняем текущие локальные достижения перед переключением
+            // Сохраняем текущие достижения перед переключением
             saveProgress();
         }
         
@@ -146,18 +154,15 @@ public class AchievementSystem implements Disposable {
             Gdx.app.log("AchievementSystem", "Переключение пользователя с " + 
                          (oldUserId != null ? oldUserId : "null") + " на " + userId);
         } 
-        // Если пользователь вышел (userId == null)
-        else if (userId == null) {
+        // Если пользователь вышел (userId == null) или Firebase недоступен
+        else {
             // Сбрасываем все достижения
             resetAllAchievements();
-            
-            // Загружаем локальные достижения для неавторизованного пользователя
-            loadProgressFromLocal();
             
             // Сбрасываем состояние загрузки
             isLoading = false;
             
-            Gdx.app.log("AchievementSystem", "Пользователь вышел, загружены локальные достижения");
+            Gdx.app.log("AchievementSystem", "Пользователь не авторизован или Firebase недоступен, достижения сброшены");
         }
     }
     
@@ -463,27 +468,16 @@ public class AchievementSystem implements Disposable {
      * Загружает прогресс достижений из локального хранилища
      */
     private void loadProgressFromLocal() {
-        for (String id : achievements.keys()) {
-            Achievement achievement = achievements.get(id);
-            achievement.unlocked = prefs.getBoolean(id + UNLOCKED_SUFFIX, false);
-            achievement.progress = prefs.getInteger(id + PROGRESS_SUFFIX, 0);
-        }
-    }
-    
-    /**
-     * Сохраняет прогресс достижений
-     */
-    private void saveProgress() {
-        // Сохраняем локально
-        saveProgressToLocal();
+        // ВРЕМЕННО: Отключаем локальное хранилище, используем только Firebase
+        Gdx.app.log("AchievementSystem", "Локальное хранилище временно отключено. Используем только Firebase.");
         
-        // Если включен Firebase и пользователь авторизован, сохраняем туда
-        if (isUsingFirebase && userId != null) {
-            saveToFirebase();
-        } else {
-            Gdx.app.log("AchievementSystem", "Сохранение только локально: Firebase " + 
-                    (isUsingFirebase ? "активирован" : "не активирован") + 
-                    ", userId " + (userId != null ? userId : "null"));
+        // Если Firebase недоступен, инициализируем достижения пустыми значениями
+        if (!isUsingFirebase || userId == null) {
+            for (String id : achievements.keys()) {
+                Achievement achievement = achievements.get(id);
+                achievement.unlocked = false;
+                achievement.progress = 0;
+            }
         }
     }
     
@@ -491,16 +485,25 @@ public class AchievementSystem implements Disposable {
      * Сохраняет прогресс достижений в локальное хранилище
      */
     private void saveProgressToLocal() {
-        try {
-            for (String id : achievements.keys()) {
-                Achievement achievement = achievements.get(id);
-                prefs.putBoolean(id + UNLOCKED_SUFFIX, achievement.unlocked);
-                prefs.putInteger(id + PROGRESS_SUFFIX, achievement.progress);
-            }
-            prefs.flush();
-            Gdx.app.log("AchievementSystem", "Достижения успешно сохранены локально");
-        } catch (Exception e) {
-            Gdx.app.error("AchievementSystem", "Ошибка сохранения достижений локально: " + e.getMessage());
+        // ВРЕМЕННО: Отключаем локальное хранилище, используем только Firebase
+        Gdx.app.log("AchievementSystem", "Локальное хранилище временно отключено. Используем только Firebase.");
+        
+        // Не сохраняем в локальное хранилище
+    }
+    
+    /**
+     * Сохраняет прогресс достижений
+     */
+    private void saveProgress() {
+        // Временно: пропускаем локальное сохранение
+        
+        // Если включен Firebase и пользователь авторизован, сохраняем туда
+        if (isUsingFirebase && userId != null) {
+            saveToFirebase();
+        } else {
+            Gdx.app.log("AchievementSystem", "Данные не сохранены: Firebase " + 
+                    (isUsingFirebase ? "активирован" : "не активирован") + 
+                    ", userId " + (userId != null ? userId : "null"));
         }
     }
     
