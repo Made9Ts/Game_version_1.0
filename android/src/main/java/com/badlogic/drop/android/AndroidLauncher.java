@@ -116,6 +116,12 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
     }
     
     @Override
+    public String getUserId() {
+        FirebaseUser user = authManager.getCurrentUser();
+        return user != null ? user.getUid() : null;
+    }
+    
+    @Override
     public String getUserPhotoUrl() {
         FirebaseUser user = authManager.getCurrentUser();
         return user != null && user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : null;
@@ -137,7 +143,7 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
             Toast.makeText(this, "Добро пожаловать, " + user.getDisplayName(), Toast.LENGTH_SHORT).show();
             // Уведомляем игру о успешном входе
             if (game != null) {
-                game.onGoogleSignInSuccess(user.getDisplayName(), user.getEmail());
+                game.onGoogleSignInSuccess(user.getDisplayName(), user.getEmail(), user.getUid());
             }
         });
     }

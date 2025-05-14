@@ -5,17 +5,21 @@ import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.ObjectMap;
+import com.badlogic.drop.SpaceCourierGame;
+import com.badlogic.drop.firebase.FirebaseInterface;
 
 /**
  * Система достижений для игры Space Courier.
  * Отслеживает прогресс игрока и выдает награды за выполнение определенных условий.
  * Хранит состояние разблокированных достижений между сессиями игры.
+ * Поддерживает сохранение достижений в Firebase для авторизованных пользователей.
  */
 public class AchievementSystem implements Disposable {
     
     // Состояние достижений
     private ObjectMap<String, Achievement> achievements;
     private Array<String> unlockedThisSession;
+    private boolean isLoading = false; // Флаг, указывающий что идет загрузка достижений
     
     // Константы для имен достижений
     public static final String ACHIEVEMENT_FIRST_FLIGHT = "first_flight";
@@ -40,6 +44,12 @@ public class AchievementSystem implements Disposable {
     private static final String PREFS_NAME = "spacecourier_achievements";
     private static final String UNLOCKED_SUFFIX = "_unlocked";
     private static final String PROGRESS_SUFFIX = "_progress";
+    
+    // Firebase для онлайн-сохранений
+    private FirebaseInterface firebase;
+    private boolean isUsingFirebase = false;
+    private String userId = null;
+    private SpaceCourierGame game;
     
     /**
      * Класс для хранения информации о достижении
@@ -82,8 +92,227 @@ public class AchievementSystem implements Disposable {
         // Инициализируем достижения
         initializeAchievements();
         
-        // Загружаем прогресс
+        // Загружаем прогресс из локального хранилища
         loadProgress();
+    }
+    
+    /**
+     * Конструктор системы достижений с Firebase
+     * @param game Основной класс игры
+     * @param firebase Интерфейс Firebase
+     */
+    public AchievementSystem(SpaceCourierGame game, FirebaseInterface firebase) {
+        this();
+        this.game = game;
+        this.firebase = firebase;
+        this.isUsingFirebase = (firebase != null);
+    }
+    
+    /**
+     * Устанавливает текущего пользователя Firebase
+     * @param userId ID пользователя
+     */
+    public void setUser(String userId) {
+        // Если ID не изменился, ничего не делаем
+        if ((this.userId == null && userId == null) || 
+            (this.userId != null && this.userId.equals(userId))) {
+            return;
+        }
+        
+        // Если у нас был предыдущий пользователь, сохраняем его достижения
+        if (isUsingFirebase && this.userId != null) {
+            // Сохраняем текущие локальные достижения перед переключением
+            saveProgress();
+        }
+        
+        // Сохраняем новый ID пользователя
+        String oldUserId = this.userId;
+        this.userId = userId;
+        
+        // Устанавливаем флаг загрузки, если новый пользователь (для немедленного UI-отклика)
+        if (userId != null) {
+            isLoading = true;
+        }
+        
+        // Если установлен новый пользователь и Firebase доступен
+        if (isUsingFirebase && userId != null) {
+            // Сначала сбрасываем все прогрессы на исходные 
+            resetAllAchievements();
+            
+            // Затем загружаем достижения пользователя из Firebase
+            loadFromFirebase();
+            
+            // Добавляем логирование для отладки
+            Gdx.app.log("AchievementSystem", "Переключение пользователя с " + 
+                         (oldUserId != null ? oldUserId : "null") + " на " + userId);
+        } 
+        // Если пользователь вышел (userId == null)
+        else if (userId == null) {
+            // Сбрасываем все достижения
+            resetAllAchievements();
+            
+            // Загружаем локальные достижения для неавторизованного пользователя
+            loadProgressFromLocal();
+            
+            // Сбрасываем состояние загрузки
+            isLoading = false;
+            
+            Gdx.app.log("AchievementSystem", "Пользователь вышел, загружены локальные достижения");
+        }
+    }
+    
+    /**
+     * Сбрасывает все достижения в начальное состояние
+     */
+    private void resetAllAchievements() {
+        for (String id : achievements.keys()) {
+            Achievement achievement = achievements.get(id);
+            achievement.progress = 0;
+            achievement.unlocked = false;
+        }
+        
+        unlockedThisSession.clear();
+        Gdx.app.log("AchievementSystem", "Все достижения сброшены");
+    }
+    
+    /**
+     * Загружает достижения из Firebase
+     */
+    private void loadFromFirebase() {
+        if (firebase == null || userId == null) {
+            Gdx.app.error("AchievementSystem", "Невозможно загрузить из Firebase: " + 
+                         (firebase == null ? "firebase == null" : "userId == null"));
+            return;
+        }
+        
+        Gdx.app.log("AchievementSystem", "Начинаем загрузку достижений из Firebase для пользователя: " + userId);
+        
+        // Устанавливаем флаг загрузки
+        isLoading = true;
+        
+        final long startTime = System.currentTimeMillis();
+        final boolean[] loadingCompleted = {false};
+        
+        // Запускаем асинхронную загрузку
+        firebase.getAchievements(userId, new FirebaseInterface.AchievementsCallback() {
+            @Override
+            public void onAchievementsLoaded(ObjectMap<String, Object> achievementsData) {
+                // Отмечаем, что загрузка завершена
+                loadingCompleted[0] = true;
+                isLoading = false;
+                
+                if (achievementsData == null || achievementsData.size == 0) {
+                    Gdx.app.log("AchievementSystem", "Нет данных достижений в Firebase для пользователя: " + userId);
+                    return;
+                }
+                
+                Gdx.app.log("AchievementSystem", "Получены данные из Firebase: " + achievementsData.size + " записей");
+                
+                // Обновляем достижения из Firebase
+                int updatedCount = 0;
+                
+                for (String id : achievements.keys()) {
+                    Achievement achievement = achievements.get(id);
+                    
+                    // Проверяем, есть ли данные для этого достижения
+                    if (achievementsData.containsKey(id + UNLOCKED_SUFFIX)) {
+                        Object unlockedValue = achievementsData.get(id + UNLOCKED_SUFFIX);
+                        if (unlockedValue instanceof Boolean) {
+                            boolean unlocked = (Boolean) unlockedValue;
+                            achievement.unlocked = unlocked;
+                            updatedCount++;
+                        }
+                    }
+                    
+                    if (achievementsData.containsKey(id + PROGRESS_SUFFIX)) {
+                        Object progressValue = achievementsData.get(id + PROGRESS_SUFFIX);
+                        if (progressValue instanceof Number) {
+                            int progress = ((Number) progressValue).intValue();
+                            achievement.progress = progress;
+                            updatedCount++;
+                        }
+                    }
+                }
+                
+                // Сохраняем данные в локальное хранилище для резервного доступа
+                saveProgressToLocal();
+                
+                // Журналируем статистику загрузки
+                long loadTime = System.currentTimeMillis() - startTime;
+                Gdx.app.log("AchievementSystem", "Достижения успешно загружены из Firebase для пользователя: " + 
+                          userId + ". Обновлено " + updatedCount + " полей за " + loadTime + " мс");
+            }
+            
+            @Override
+            public void onError(String error) {
+                // Отмечаем, что загрузка завершена с ошибкой
+                loadingCompleted[0] = true;
+                isLoading = false;
+                
+                Gdx.app.error("AchievementSystem", "Ошибка загрузки достижений из Firebase: " + error);
+                
+                // Если возникла ошибка, используем локальные данные
+                loadProgressFromLocal();
+            }
+        });
+        
+        // Добавим таймаут для загрузки, чтобы не зависать если Firebase не отвечает
+        // Это будет работать, только если метод вызывается из UI потока
+        if (Gdx.app != null) {
+            Gdx.app.postRunnable(new Runnable() {
+                @Override
+                public void run() {
+                    // Проверяем через 5 секунд
+                    long elapsedTime = System.currentTimeMillis() - startTime;
+                    if (!loadingCompleted[0] && elapsedTime > 5000) {
+                        Gdx.app.error("AchievementSystem", "Тайм-аут загрузки достижений из Firebase для пользователя " + 
+                                  userId + " после " + elapsedTime + " мс");
+                        
+                        // Если таймаут, загружаем локальные данные
+                        loadProgressFromLocal();
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Сохраняет достижения в Firebase
+     */
+    private void saveToFirebase() {
+        if (!isUsingFirebase || userId == null) {
+            Gdx.app.log("AchievementSystem", "Невозможно сохранить данные в Firebase: " +
+                        (userId == null ? "userId == null" : "Firebase не активирован"));
+            return;
+        }
+        
+        Gdx.app.log("AchievementSystem", "Сохранение достижений в Firebase для пользователя: " + userId);
+        final long startTime = System.currentTimeMillis();
+        
+        ObjectMap<String, Object> achievementsData = new ObjectMap<String, Object>();
+        
+        // Преобразуем достижения в формат для Firebase
+        for (String id : achievements.keys()) {
+            Achievement achievement = achievements.get(id);
+            achievementsData.put(id + UNLOCKED_SUFFIX, achievement.unlocked);
+            achievementsData.put(id + PROGRESS_SUFFIX, achievement.progress);
+        }
+        
+        // Сохраняем в Firebase
+        firebase.saveAchievements(userId, achievementsData, new FirebaseInterface.CompletionCallback() {
+            @Override
+            public void onSuccess() {
+                long saveTime = System.currentTimeMillis() - startTime;
+                Gdx.app.log("AchievementSystem", "Достижения успешно сохранены в Firebase для пользователя: " + 
+                          userId + " за " + saveTime + " мс");
+            }
+            
+            @Override
+            public void onError(String error) {
+                Gdx.app.error("AchievementSystem", "Ошибка сохранения достижений в Firebase для пользователя " + 
+                           userId + ": " + error);
+            }
+        });
     }
     
     /**
@@ -223,6 +452,17 @@ public class AchievementSystem implements Disposable {
      * Загружает прогресс достижений из настроек
      */
     private void loadProgress() {
+        if (isUsingFirebase && userId != null) {
+            loadFromFirebase();
+        } else {
+            loadProgressFromLocal();
+        }
+    }
+    
+    /**
+     * Загружает прогресс достижений из локального хранилища
+     */
+    private void loadProgressFromLocal() {
         for (String id : achievements.keys()) {
             Achievement achievement = achievements.get(id);
             achievement.unlocked = prefs.getBoolean(id + UNLOCKED_SUFFIX, false);
@@ -231,15 +471,37 @@ public class AchievementSystem implements Disposable {
     }
     
     /**
-     * Сохраняет прогресс достижений в настройки
+     * Сохраняет прогресс достижений
      */
     private void saveProgress() {
-        for (String id : achievements.keys()) {
-            Achievement achievement = achievements.get(id);
-            prefs.putBoolean(id + UNLOCKED_SUFFIX, achievement.unlocked);
-            prefs.putInteger(id + PROGRESS_SUFFIX, achievement.progress);
+        // Сохраняем локально
+        saveProgressToLocal();
+        
+        // Если включен Firebase и пользователь авторизован, сохраняем туда
+        if (isUsingFirebase && userId != null) {
+            saveToFirebase();
+        } else {
+            Gdx.app.log("AchievementSystem", "Сохранение только локально: Firebase " + 
+                    (isUsingFirebase ? "активирован" : "не активирован") + 
+                    ", userId " + (userId != null ? userId : "null"));
         }
-        prefs.flush();
+    }
+    
+    /**
+     * Сохраняет прогресс достижений в локальное хранилище
+     */
+    private void saveProgressToLocal() {
+        try {
+            for (String id : achievements.keys()) {
+                Achievement achievement = achievements.get(id);
+                prefs.putBoolean(id + UNLOCKED_SUFFIX, achievement.unlocked);
+                prefs.putInteger(id + PROGRESS_SUFFIX, achievement.progress);
+            }
+            prefs.flush();
+            Gdx.app.log("AchievementSystem", "Достижения успешно сохранены локально");
+        } catch (Exception e) {
+            Gdx.app.error("AchievementSystem", "Ошибка сохранения достижений локально: " + e.getMessage());
+        }
     }
     
     /**
@@ -405,5 +667,13 @@ public class AchievementSystem implements Disposable {
         saveProgress();
         achievements.clear();
         unlockedThisSession.clear();
+    }
+    
+    /**
+     * Проверяет, выполняется ли в данный момент загрузка достижений
+     * @return true, если идет асинхронная загрузка достижений
+     */
+    public boolean isLoading() {
+        return isLoading;
     }
 } 

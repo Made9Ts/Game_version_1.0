@@ -391,13 +391,20 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
      * Обновляет информацию о профиле пользователя
      */
     private void updateProfileInfo() {
+        // Защищаемся от возможных null-указателей
+        if (userNameLabel == null || (isSignedIn && userEmailLabel == null)) {
+            return;
+        }
+        
         if (isSignedIn && game.getGoogleUserName() != null) {
             userNameLabel.setText("Имя: " + game.getGoogleUserName());
             userEmailLabel.setText("Email: " + game.getGoogleUserEmail());
             userEmailLabel.setVisible(true);
         } else {
             userNameLabel.setText("Войдите, чтобы увидеть данные профиля");
-            userEmailLabel.setVisible(false);
+            if (userEmailLabel != null) {
+                userEmailLabel.setVisible(false);
+            }
         }
     }
     
@@ -405,6 +412,11 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
      * Обновляет список достижений
      */
     private void updateAchievementsList() {
+        // Защищаемся от возможных null-указателей
+        if (achievementsTable == null || skin == null) {
+            return;
+        }
+        
         // Очищаем таблицу достижений, кроме заголовка
         int childrenCount = achievementsTable.getChildren().size;
         // Сохраняем заголовок
@@ -415,6 +427,21 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
             Label achievementsHeaderLabel = new Label("ДОСТИЖЕНИЯ", skin, "title");
             achievementsTable.add(achievementsHeaderLabel).pad(padding).colspan(1).left(); // colspan=1, теперь всего одна колонка
             achievementsTable.row();
+        }
+        
+        // Проверяем, инициализирована ли система достижений
+        if (game.achievementSystem == null) {
+            // Система достижений ещё не инициализирована, добавляем сообщение об этом
+            Label noAchievementsLabel = new Label("Система достижений загружается...", skin);
+            achievementsTable.add(noAchievementsLabel).pad(padding).left();
+            return;
+        }
+        
+        // Проверяем, идет ли загрузка достижений
+        if (game.achievementSystem.isLoading()) {
+            Label loadingLabel = new Label("Загрузка достижений...", skin);
+            achievementsTable.add(loadingLabel).pad(padding).left();
+            return;
         }
         
         // Получаем все достижения
@@ -430,46 +457,54 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
         // Не добавляем заголовки колонок, так как теперь одна колонка с вложенными строками
         
         // Добавляем достижения в таблицу
-        for (ObjectMap.Entry<String, AchievementSystem.Achievement> entry : allAchievements.entries()) {
-            AchievementSystem.Achievement achievement = entry.value;
-            boolean isUnlocked = achievement.unlocked;
-            
-            // Создаем таблицу для строки достижения с фоном
-            Table achievementRow = new Table();
-            Color bgColor = isUnlocked ? 
-                new Color(0.1f, 0.5f, 0.1f, 0.4f) : // Зеленый фон для разблокированных
-                new Color(0.2f, 0.2f, 0.3f, 0.3f);  // Серый фон для заблокированных
-            achievementRow.setBackground(skin.newDrawable("white-pixel", bgColor));
-            
-            // Статус отображаем в названии (перед ним)
-            String statusText = isUnlocked ? "✓ " : "✗ ";
-            
-            // Название с индикатором статуса
-            Label nameLabel = new Label(statusText + achievement.title, skin, isUnlocked ? "achievement" : "locked");
-            
-            // Описание достижения
-            Label descLabel = new Label(achievement.description, skin);
-            
-            // Для лучшей читаемости на малых экранах применяем перенос текста
-            descLabel.setWrap(true);
-            
-            // Создаем вертикальное размещение (название сверху, описание снизу)
-            // Название занимает всю ширину и выравнивается по левому краю
-            achievementRow.add(nameLabel).width(totalWidth - columnPadding * 2).pad(columnPadding, columnPadding, columnPadding/2, columnPadding).left().fillX();
-            achievementRow.row();
-            
-            // Добавляем тонкую разделительную линию между названием и описанием
-            Table separator = new Table();
-            separator.setBackground(skin.newDrawable("white-pixel", new Color(1, 1, 1, 0.2f)));
-            achievementRow.add(separator).height(1).pad(0, columnPadding * 2, columnPadding/2, columnPadding * 2).fillX();
-            achievementRow.row();
-            
-            // Описание занимает всю ширину и выравнивается по левому краю
-            achievementRow.add(descLabel).width(totalWidth - columnPadding * 2).pad(columnPadding/2, columnPadding, columnPadding, columnPadding).left().fillX();
-            
-            // Добавляем строку достижения в таблицу достижений
-            achievementsTable.add(achievementRow).fillX().pad(columnPadding / 2);
-            achievementsTable.row();
+        if (allAchievements != null && allAchievements.size > 0) {
+            for (ObjectMap.Entry<String, AchievementSystem.Achievement> entry : allAchievements.entries()) {
+                if (entry == null || entry.value == null) continue;
+                
+                AchievementSystem.Achievement achievement = entry.value;
+                boolean isUnlocked = achievement.unlocked;
+                
+                // Создаем таблицу для строки достижения с фоном
+                Table achievementRow = new Table();
+                Color bgColor = isUnlocked ? 
+                    new Color(0.1f, 0.5f, 0.1f, 0.4f) : // Зеленый фон для разблокированных
+                    new Color(0.2f, 0.2f, 0.3f, 0.3f);  // Серый фон для заблокированных
+                achievementRow.setBackground(skin.newDrawable("white-pixel", bgColor));
+                
+                // Статус отображаем в названии (перед ним)
+                String statusText = isUnlocked ? "✓ " : "✗ ";
+                
+                // Название с индикатором статуса
+                Label nameLabel = new Label(statusText + achievement.title, skin, isUnlocked ? "achievement" : "locked");
+                
+                // Описание достижения
+                Label descLabel = new Label(achievement.description, skin);
+                
+                // Для лучшей читаемости на малых экранах применяем перенос текста
+                descLabel.setWrap(true);
+                
+                // Создаем вертикальное размещение (название сверху, описание снизу)
+                // Название занимает всю ширину и выравнивается по левому краю
+                achievementRow.add(nameLabel).width(totalWidth - columnPadding * 2).pad(columnPadding, columnPadding, columnPadding/2, columnPadding).left().fillX();
+                achievementRow.row();
+                
+                // Добавляем тонкую разделительную линию между названием и описанием
+                Table separator = new Table();
+                separator.setBackground(skin.newDrawable("white-pixel", new Color(1, 1, 1, 0.2f)));
+                achievementRow.add(separator).height(1).pad(0, columnPadding * 2, columnPadding/2, columnPadding * 2).fillX();
+                achievementRow.row();
+                
+                // Описание занимает всю ширину и выравнивается по левому краю
+                achievementRow.add(descLabel).width(totalWidth - columnPadding * 2).pad(columnPadding/2, columnPadding, columnPadding, columnPadding).left().fillX();
+                
+                // Добавляем строку достижения в таблицу достижений
+                achievementsTable.add(achievementRow).fillX().pad(columnPadding / 2);
+                achievementsTable.row();
+            }
+        } else {
+            // Если нет доступных достижений, показываем соответствующее сообщение
+            Label noAchievementsLabel = new Label("Нет доступных достижений", skin);
+            achievementsTable.add(noAchievementsLabel).pad(padding).left();
         }
     }
 
@@ -507,6 +542,11 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
         }
         
         game.batch.end();
+        
+        // Проверяем, не началась ли загрузка достижений, и запускаем опрос
+        if (game.achievementSystem != null && game.achievementSystem.isLoading() && !isPolling) {
+            startLoadingPolling();
+        }
         
         // Отрисовываем UI
         stage.act(Math.min(Gdx.graphics.getDeltaTime(), 1/30f));
@@ -568,6 +608,9 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
 
     @Override
     public void dispose() {
+        // Останавливаем опрос загрузки
+        isPolling = false;
+        
         // Отписываемся от событий
         game.removeGoogleAuthListener(this);
         
@@ -585,14 +628,70 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
     // --- Реализация интерфейса GoogleAuthListener ---
     
     @Override
-    public void onGoogleSignInSuccess(String userName, String email) {
-        // Обновляем UI после успешной авторизации
-        isSignedIn = true;
-        if (googleAuthButton != null) {
-            googleAuthButton.setText("ВЫЙТИ");
-        }
-        // Обновляем информацию профиля
-        updateProfileInfo();
+    public void onGoogleSignInSuccess(String userName, String email, String userId) {
+        // Обеспечиваем выполнение обновления UI только в главном потоке рендеринга
+        Gdx.app.postRunnable(new Runnable() {
+            @Override
+            public void run() {
+                // Обновляем UI после успешной авторизации
+                isSignedIn = true;
+                if (googleAuthButton != null) {
+                    googleAuthButton.setText("ВЫЙТИ");
+                }
+                // Обновляем информацию профиля
+                updateProfileInfo();
+                
+                // Обновляем список достижений после входа, когда система достижений должна быть уже инициализирована
+                if (game.achievementSystem != null) {
+                    updateAchievementsList();
+                    
+                    // Запускаем периодическое обновление, если достижения загружаются
+                    if (game.achievementSystem.isLoading()) {
+                        startLoadingPolling();
+                    }
+                }
+            }
+        });
+    }
+    
+    // Периодическое обновление при загрузке
+    private boolean isPolling = false;
+    
+    /**
+     * Запускает периодическое обновление списка достижений до окончания загрузки
+     */
+    private void startLoadingPolling() {
+        if (isPolling) return;
+        
+        isPolling = true;
+        
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Проверяем состояние загрузки каждые 500 мс
+                    while (isPolling && game.achievementSystem != null && game.achievementSystem.isLoading()) {
+                        Thread.sleep(500);
+                    }
+                    
+                    // Когда загрузка завершена, обновляем UI в главном потоке
+                    if (isPolling) {
+                        Gdx.app.postRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (game.achievementSystem != null) {
+                                    updateAchievementsList();
+                                }
+                            }
+                        });
+                    }
+                } catch (InterruptedException e) {
+                    Gdx.app.error("ProfileScreen", "Ошибка при ожидании загрузки достижений", e);
+                } finally {
+                    isPolling = false;
+                }
+            }
+        }).start();
     }
     
     @Override
