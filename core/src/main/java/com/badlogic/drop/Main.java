@@ -15,8 +15,6 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
-//import com.badlogic.gdx.backends.lwjgl.LwjglApplication;
-//import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
 
 /**
  * Простая версия игры Space Courier.
@@ -335,6 +333,37 @@ public class Main extends ApplicationAdapter {
     }
     
     /**
+     * Проверяет столкновение между двумя объектами с использованием более обтекаемых хитбоксов.
+     * Вместо прямоугольников используется расстояние между центрами объектов и радиусы.
+     * 
+     * @param obj1 первый объект
+     * @param obj2 второй объект
+     * @param collisionFactor множитель для настройки "обтекаемости" хитбоксов (< 1.0f для меньшего хитбокса)
+     * @return true, если объекты столкнулись
+     */
+    private boolean checkSmoothCollision(Rectangle obj1, Rectangle obj2, float collisionFactor) {
+        // Рассчитываем центры объектов
+        float centerX1 = obj1.x + obj1.width / 2;
+        float centerY1 = obj1.y + obj1.height / 2;
+        float centerX2 = obj2.x + obj2.width / 2;
+        float centerY2 = obj2.y + obj2.height / 2;
+        
+        // Рассчитываем расстояние между центрами
+        float dx = centerX1 - centerX2;
+        float dy = centerY1 - centerY2;
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        
+        // Рассчитываем сумму радиусов (с учетом множителя для обтекаемости)
+        // Используем меньшую из сторон объекта для более точного хитбокса
+        float radius1 = Math.min(obj1.width, obj1.height) / 2;
+        float radius2 = Math.min(obj2.width, obj2.height) / 2;
+        float minDistance = (radius1 + radius2) * collisionFactor;
+        
+        // Если расстояние меньше суммы радиусов, то произошло столкновение
+        return distance < minDistance;
+    }
+    
+    /**
      * Обновляет положение астероидов и обрабатывает столкновения
      */
     private void updateAsteroids(float deltaTime) {
@@ -351,8 +380,8 @@ public class Main extends ApplicationAdapter {
                 continue;
             }
             
-            // Обработка столкновения с игроком
-            if (asteroid.overlaps(playerShip)) {
+            // Обработка столкновения с игроком с использованием обтекаемых хитбоксов
+            if (checkSmoothCollision(asteroid, playerShip, 0.85f)) {
                 explosionSound.play(0.3f);
                 asteroids.removeIndex(i);
                 loseLife();
@@ -386,8 +415,8 @@ public class Main extends ApplicationAdapter {
                 continue;
             }
             
-            // Обработка столкновения с игроком
-            if (enemy.overlaps(playerShip)) {
+            // Обработка столкновения с игроком с использованием обтекаемых хитбоксов
+            if (checkSmoothCollision(enemy, playerShip, 0.8f)) {
                 explosionSound.play(0.5f);
                 enemies.removeIndex(i);
                 loseLife();
@@ -410,8 +439,8 @@ public class Main extends ApplicationAdapter {
                 continue;
             }
             
-            // Обработка сбора канистры игроком
-            if (fuelCanister.overlaps(playerShip)) {
+            // Обработка сбора канистры игроком с использованием обтекаемых хитбоксов
+            if (checkSmoothCollision(fuelCanister, playerShip, 0.9f)) {
                 collectSound.play(0.5f);
                 fuelCanisters.removeIndex(i);
                 fuel = Math.min(MAX_FUEL, fuel + 25);
