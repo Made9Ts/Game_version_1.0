@@ -276,8 +276,8 @@ public class DifficultySystem {
         
         // Возвращаем ограниченную сложность
         return MathUtils.clamp(rawDifficulty, minComfortDifficulty, maxComfortDifficulty);
-    }
-    
+        }
+        
     /**
      * Проверяет прогресс игрока к следующему уровню
      */
@@ -287,7 +287,7 @@ public class DifficultySystem {
             currentLevel++;
             levelChanged = true;
             lastLevelChangeScore = score;
-            
+        
             // Обновляем порог для следующего уровня
             if (currentLevel < levelThresholds.length - 1) {
                 scoreForNextLevel = levelThresholds[currentLevel + 1];
@@ -299,7 +299,7 @@ public class DifficultySystem {
             comfortZoneMin = Math.min(0.9f, comfortZoneMin + 0.05f);
             comfortZoneMax = Math.max(1.1f, comfortZoneMax - 0.05f);
             comfortZoneTimer = 0;
-            
+        
             // Ограничиваем базовую сложность
             baseDifficulty = MathUtils.clamp(baseDifficulty, MIN_DIFFICULTY, MAX_DIFFICULTY);
         }

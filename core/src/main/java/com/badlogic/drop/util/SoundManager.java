@@ -133,8 +133,14 @@ public class SoundManager implements Disposable {
         preferences.putFloat(MUSIC_VOLUME_KEY, musicVolume);
         saveSettings();
         
+        // Убедимся, что значение применяется немедленно к текущей музыке
         if (currentMusic != null) {
-            currentMusic.setVolume(musicVolume);
+            // Только если музыка включена
+            if (musicEnabled) {
+                currentMusic.setVolume(musicVolume);
+            } else {
+                currentMusic.setVolume(0);
+            }
         }
     }
     
@@ -178,10 +184,13 @@ public class SoundManager implements Disposable {
         
         if (currentMusic != null) {
             currentMusic.setLooping(looping);
-            currentMusic.setVolume(musicVolume);
             
+            // Применяем текущую громкость
             if (musicEnabled) {
+                currentMusic.setVolume(musicVolume);
                 currentMusic.play();
+            } else {
+                currentMusic.setVolume(0);
             }
         }
     }
@@ -193,6 +202,7 @@ public class SoundManager implements Disposable {
      */
     public long playSound(Sound sound) {
         if (sfxEnabled && sound != null) {
+            // Применяем текущую громкость эффектов
             return sound.play(sfxVolume);
         }
         return -1;
@@ -208,6 +218,7 @@ public class SoundManager implements Disposable {
      */
     public long playSound(Sound sound, float volume, float pitch, float pan) {
         if (sfxEnabled && sound != null) {
+            // Применяем общую громкость эффектов, умноженную на относительную громкость этого звука
             return sound.play(sfxVolume * volume, pitch, pan);
         }
         return -1;

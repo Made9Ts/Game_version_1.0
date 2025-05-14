@@ -3,6 +3,7 @@ package com.badlogic.drop.screens;
 import com.badlogic.drop.SpaceCourierGame;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -345,6 +346,11 @@ public class OptionsScreen implements Screen {
                 float value = musicVolumeSlider.getValue() / 100f;
                 game.soundManager.setMusicVolume(value);
                 musicVolumeLabel.setText(String.valueOf((int)musicVolumeSlider.getValue()));
+                
+                // Обновляем музыку для немедленного применения эффекта
+                if (game.soundManager.isMusicEnabled()) {
+                    game.soundManager.resumeMusic();
+                }
             }
         });
         
@@ -354,6 +360,18 @@ public class OptionsScreen implements Screen {
                 float value = sfxVolumeSlider.getValue() / 100f;
                 game.soundManager.setSfxVolume(value);
                 sfxVolumeLabel.setText(String.valueOf((int)sfxVolumeSlider.getValue()));
+                
+                // Проиграем тестовый звук для демонстрации уровня громкости
+                if (game.soundManager.isSfxEnabled() && sfxVolumeSlider.isDragging()) {
+                    // Получаем звук из GameScreen (если это возможно)
+                    try {
+                        Sound testSound = Gdx.audio.newSound(Gdx.files.internal("collect.wav"));
+                        game.soundManager.playSound(testSound, 1.0f, 1.0f, 0.0f);
+                        testSound.dispose(); // Освобождаем ресурс после использования
+                    } catch (Exception e) {
+                        Gdx.app.log("OptionsScreen", "Не удалось воспроизвести тестовый звук");
+                    }
+                }
             }
         });
         

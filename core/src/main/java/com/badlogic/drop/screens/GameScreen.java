@@ -57,7 +57,6 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Константы игрового процесса
     private static final int SHIP_SPEED = 500;
-    private static final float SPEED_BOOST_MULTIPLIER = 1.5f;
     private static final float MAX_FUEL = 100f;
     private static final float FUEL_CONSUMPTION = 2.5f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
     private static final int MAX_LIVES = 3;
@@ -125,7 +124,6 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Состояние бонусов
     private boolean shieldActive;
-    private boolean speedBoostActive;
     private boolean magnetActive;
     private boolean doubleScoreActive;
 
@@ -179,6 +177,9 @@ public class GameScreen implements Screen, ControllerListener {
     private static final float BOSS_PROJECTILE_SPEED = 200f; // Скорость снаряда босса
     private static final long BOSS_SHOOT_INTERVAL = 1500000000L; // Интервал стрельбы (1.5 секунды)
 
+    // Константа для интервала случайного появления бонусов (15 секунд)
+    private static final float POWERUP_SPAWN_INTERVAL = 15f;
+
     // Параметры боссов
     private Rectangle boss;
     private boolean bossActive;
@@ -193,10 +194,13 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Константы для контроллера
     private static final float CONTROLLER_DEADZONE = 0.25f; // Мертвая зона для стиков
-    
+
     // Состояние контроллера
     private Controller activeController;
     private boolean controllerConnected = false;
+
+    // Время последнего появления бонуса
+    private float lastPowerupTime = 0;
 
     /**
      * Класс для бонусов в игре
@@ -225,7 +229,6 @@ public class GameScreen implements Screen, ControllerListener {
      */
     private enum PowerupType {
         SHIELD,        // Защита от столкновений
-        SPEED_BOOST,   // Увеличение скорости
         MAGNET,        // Притягивает топливо и сердечки
         DOUBLE_SCORE   // Удвоение очков
     }
@@ -325,7 +328,7 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Создаем систему управления сложностью
         difficultySystem = new DifficultySystem();
-        
+
         // Инициализируем поддержку контроллеров
         initializeControllers();
 
@@ -437,7 +440,6 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Сбрасываем состояние бонусов
         shieldActive = false;
-        speedBoostActive = false;
         magnetActive = false;
         doubleScoreActive = false;
 
@@ -868,6 +870,24 @@ public class GameScreen implements Screen, ControllerListener {
         float heartsStartX = 20; // Начальная X-координата для сердечек
         float heartsY = 85; // Y-координата для сердечек (над индикатором топлива)
 
+        // Отображение активных бонусов (над сердечками)
+        float powerupY = heartsY + heartIconSize + 10; // Располагаем над сердечками с отступом
+        float powerupX = heartsStartX;
+
+        if (shieldActive) {
+            game.batch.draw(shieldTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            powerupX += POWERUP_ICON_SIZE + 10;
+        }
+
+        if (magnetActive) {
+            game.batch.draw(magnetTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            powerupX += POWERUP_ICON_SIZE + 10;
+        }
+
+        if (doubleScoreActive) {
+            game.batch.draw(doubleScoreTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+        }
+
         // Отрисовка сердечек в соответствии с числом жизней
         for (int i = 0; i < MAX_LIVES; i++) {
             if (i < lives) {
@@ -883,28 +903,6 @@ public class GameScreen implements Screen, ControllerListener {
         // Возвращаем нормальный цвет
         game.batch.setColor(1, 1, 1, 1);
         font.setColor(1, 1, 1, 1);
-
-        // Отображение активных бонусов
-        float iconX = GAME_WIDTH - POWERUP_ICON_SIZE - 20;
-
-        if (shieldActive) {
-            game.batch.draw(shieldTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
-            iconX -= POWERUP_ICON_SIZE + 10;
-        }
-
-        if (speedBoostActive) {
-            game.batch.draw(speedBoostTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
-            iconX -= POWERUP_ICON_SIZE + 10;
-        }
-
-        if (magnetActive) {
-            game.batch.draw(magnetTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
-            iconX -= POWERUP_ICON_SIZE + 10;
-        }
-
-        if (doubleScoreActive) {
-            game.batch.draw(doubleScoreTexture, iconX, GAME_HEIGHT - POWERUP_ICON_SIZE - 20, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
-        }
     }
 
     // Отрисовка анимации нового уровня
@@ -1086,6 +1084,22 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Обновляем снаряды игрока
         updatePlayerProjectiles(delta);
+
+        // Проверка необходимости случайного появления бонуса
+        lastPowerupTime += delta;
+        if (lastPowerupTime >= POWERUP_SPAWN_INTERVAL) {
+            // Вероятность появления бонуса зависит от текущей сложности
+            float spawnChance = 0.2f + (difficulty / 15f) * 0.3f; // от 20% до 50%
+
+            if (MathUtils.random() < spawnChance) {
+                // Создаем случайный бонус
+                spawnRandomPowerup();
+                lastPowerupTime = 0;
+            } else {
+                // Если бонус не появился, уменьшаем время до следующей проверки
+                lastPowerupTime = POWERUP_SPAWN_INTERVAL - 5f;
+            }
+        }
     }
 
     /**
@@ -1131,26 +1145,26 @@ public class GameScreen implements Screen, ControllerListener {
         // Проверка на стрельбу (только при битве с боссом)
         if (bossActive && !isPaused && !gameOver) {
             boolean shouldShoot = false;
-            
+
             // Проверка удержания пальца на экране (непрерывная стрельба)
             if (Gdx.input.isTouched()) {
                 // Получаем позицию касания
                 Vector3 touchPos = new Vector3();
                 touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
                 camera.unproject(touchPos);
-                
+
                 // Проверяем, что касание не на кнопке паузы
                 if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
                     touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
                     shouldShoot = true;
                 }
             }
-            
+
             // Проверка нажатия пробела (непрерывная стрельба)
             if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
                 shouldShoot = true;
             }
-            
+
             // Проверка контроллера для стрельбы
             if (controllerConnected && activeController != null) {
                 // Проверяем кнопку A (Xbox) или X (PlayStation) - обычно кнопка 0
@@ -1158,7 +1172,7 @@ public class GameScreen implements Screen, ControllerListener {
                     shouldShoot = true;
                 }
             }
-            
+
             // Если нужно стрелять и прошло достаточно времени с последнего выстрела
             if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
                 playerShoot();
@@ -1216,26 +1230,26 @@ public class GameScreen implements Screen, ControllerListener {
                 // Получаем значения левого стика
                 float axisX = activeController.getAxis(0); // Обычно горизонтальная ось левого стика
                 float axisY = -activeController.getAxis(1); // Обычно вертикальная ось левого стика (инвертируем)
-                
+
                 // Применяем мертвую зону к стикам
                 if (Math.abs(axisX) > CONTROLLER_DEADZONE) {
                     moveX += axisX;
                 }
-                
+
                 if (Math.abs(axisY) > CONTROLLER_DEADZONE) {
                     moveY += axisY;
                 }
-                
+
                 // Проверяем D-pad (крестовину)
                 // В разных контроллерах могут быть разные индексы кнопок
                 // Пробуем наиболее распространенные варианты
-                
+
                 // Вариант 1: кнопки 11-14 для D-pad
                 if (activeController.getButton(11)) moveX -= 1; // Влево
                 if (activeController.getButton(12)) moveX += 1; // Вправо
                 if (activeController.getButton(13)) moveY += 1; // Вверх
                 if (activeController.getButton(14)) moveY -= 1; // Вниз
-                
+
                 // Вариант 2: альтернативные индексы для D-pad
                 if (activeController.getButton(4)) moveY += 1; // Вверх
                 if (activeController.getButton(5)) moveY -= 1; // Вниз
@@ -1251,12 +1265,9 @@ public class GameScreen implements Screen, ControllerListener {
                 moveY /= length;
             }
 
-            // Применяем множитель скорости, если активен соответствующий бонус
-            float actualSpeed = speedBoostActive ? SHIP_SPEED * SPEED_BOOST_MULTIPLIER : SHIP_SPEED;
-
-            // Перемещаем корабль
-            ship.x += moveX * actualSpeed * delta;
-            ship.y += moveY * actualSpeed * delta;
+            // Перемещаем корабль с постоянной скоростью
+            ship.x += moveX * SHIP_SPEED * delta;
+            ship.y += moveY * SHIP_SPEED * delta;
         }
 
         // Ограничения положения корабля по X
@@ -1272,8 +1283,13 @@ public class GameScreen implements Screen, ControllerListener {
      * Игрок выполняет выстрел
      */
     private void playerShoot() {
-        // Создаем снаряд над кораблем игрока
-        float projectileX = ship.x + ship.width/2 - PLAYER_PROJECTILE_SIZE/2;
+        // Проверяем, прошло ли достаточно времени с последнего выстрела
+        if (TimeUtils.nanoTime() - lastPlayerShootTime < PLAYER_SHOOT_COOLDOWN) {
+            return;
+        }
+
+        // Вычисляем позицию для снаряда (центр корабля)
+        float projectileX = ship.x + ship.width / 2 - PLAYER_PROJECTILE_SIZE / 2;
         float projectileY = ship.y + ship.height;
 
         // Добавляем снаряд в коллекцию
@@ -1282,10 +1298,8 @@ public class GameScreen implements Screen, ControllerListener {
         // Запоминаем время выстрела
         lastPlayerShootTime = TimeUtils.nanoTime();
 
-        // Звук выстрела
-        if (game.soundManager.isSfxEnabled()) {
-            collectSound.play(0.3f);
-        }
+        // Звук выстрела через SoundManager
+        game.soundManager.playSound(collectSound, 0.3f, 1.0f, 0.0f);
     }
 
     /**
@@ -1316,10 +1330,8 @@ public class GameScreen implements Screen, ControllerListener {
                 // Добавляем очки за попадание
                 addScore(50);
 
-                // Воспроизводим звук попадания
-                if (game.soundManager.isSfxEnabled()) {
-                    explosionSound.play(0.3f);
-                }
+                // Воспроизводим звук попадания через SoundManager
+                game.soundManager.playSound(explosionSound, 0.3f, 1.0f, 0.0f);
 
                 continue;
             }
@@ -1341,7 +1353,7 @@ public class GameScreen implements Screen, ControllerListener {
             // Удаление астероидов, вышедших за пределы экрана
             if (asteroid.y + ASTEROID_SIZE < 0) {
                 iter.remove();
-                score += 10; // Очки за уклонение от астероида
+                addScore(10); // Очки за уклонение от астероида - используем метод addScore
                 // Используем специализированный метод для уклонения
                 difficultySystem.registerDodge();
             }
@@ -1356,7 +1368,7 @@ public class GameScreen implements Screen, ControllerListener {
                     iter.remove();
 
                     // Добавляем очки за попадание
-                    score += 50;
+                    addScore(50);
 
                     // Регистрируем успех
                     difficultySystem.registerSuccess();
@@ -1392,19 +1404,21 @@ public class GameScreen implements Screen, ControllerListener {
             // Удаление врагов, вышедших за пределы экрана
             if (enemy.y + ENEMY_SIZE < 0) {
                 iter.remove();
-                score += 30; // Больше очков за уклонение от врага
+                addScore(30); // Больше очков за уклонение от врага - используем метод addScore
                 // Используем специализированный метод для уклонения
                 difficultySystem.registerDodge();
             }
 
             // Обработка столкновения с кораблем
             if (enemy.overlaps(ship)) {
-                if (game.soundManager.isSfxEnabled()) {
-                    explosionSound.play();
-                }
+                // Воспроизводим звук через SoundManager
+                game.soundManager.playSound(explosionSound);
                 iter.remove();
-                loseLife();
-                difficultySystem.registerFailure(); // Регистрируем неудачу
+                // Если активен щит, то не теряем жизнь при столкновении
+                if (!shieldActive) {
+                    loseLife();
+                    difficultySystem.registerFailure(); // Регистрируем неудачу
+                }
             }
         }
     }
@@ -1443,10 +1457,8 @@ public class GameScreen implements Screen, ControllerListener {
 
             // Обработка сбора сердечка
             if (heart.overlaps(ship)) {
-                // Воспроизводим звук сбора если звуковые эффекты включены
-                if (game.soundManager.isSfxEnabled()) {
-                    collectSound.play();
-                }
+                // Воспроизводим звук сбора через SoundManager
+                game.soundManager.playSound(collectSound);
 
                 iter.remove();
                 if (lives < 3) { // Проверка, что не превышаем максимум жизней
@@ -1455,7 +1467,7 @@ public class GameScreen implements Screen, ControllerListener {
                         needHeart = false; // Жизни восстановлены до максимума
                     }
                 }
-                score += 50; // Бонусные очки за сбор сердечка
+                addScore(50); // Бонусные очки за сбор сердечка - используем метод addScore
             }
         }
     }
@@ -1467,38 +1479,26 @@ public class GameScreen implements Screen, ControllerListener {
         // Отмечаем, что игрок получил урон (для достижения "Неуязвимый")
         damageTaken = true;
 
-        // Воспроизводим звук взрыва если звуковые эффекты включены
-        if (game.soundManager.isSfxEnabled()) {
-            explosionSound.play();
-        }
+        // Воспроизводим звук взрыва через SoundManager
+        game.soundManager.playSound(explosionSound);
 
         if (lives <= 0) {
+            // Игра окончена
             gameOver = true;
-            gameMusic.stop();
-
-            // Очищаем снаряды босса и игрока при проигрыше
-            bossProjectiles.clear();
-            playerProjectiles.clear();
-
-            // Пересоздаем UI экрана проигрыша для гарантии его отображения
-            if (gameOverStage != null) {
-                gameOverStage.dispose();
-            }
-
-            // Пересоздаем сцену для гарантии корректной отрисовки
-            gameOverStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
-            createGameOverUI();
-
+            
             // Обновляем текст с финальным счетом
-            if (scoreLabel != null) {
+            if (gameOverStage != null && scoreLabel != null) {
                 scoreLabel.setText("SCORE: " + score);
             }
-
-            // При проигрыше устанавливаем обработчик ввода на gameOverStage
-            Gdx.input.setInputProcessor(gameOverStage);
-
-            // Устанавливаем флаг для принудительной отрисовки экрана проигрыша
+            
+            // Останавливаем музыку
+            game.soundManager.stopMusic();
+            
+            // Создаем экран конца игры если необходимо
             forceGameOverRender = true;
+            
+            // Переключаем ввод на игровой экран
+            Gdx.input.setInputProcessor(gameOverStage);
         }
     }
 
@@ -1513,7 +1513,7 @@ public class GameScreen implements Screen, ControllerListener {
     @Override
     public void show() {
         // Вызывается при показе экрана
-        gameMusic.play();
+        game.soundManager.resumeMusic();
         // При старте игры устанавливаем ввод на игровой процесс (не на UI)
         Gdx.input.setInputProcessor(null);
     }
@@ -1531,7 +1531,23 @@ public class GameScreen implements Screen, ControllerListener {
 
     @Override
     public void resume() {
-        // Возобновление игры после паузы
+        isPaused = false;
+        // Устанавливаем null для ввода (как в методе show)
+        Gdx.input.setInputProcessor(null);
+        
+        // Возобновляем музыку через SoundManager
+        game.soundManager.resumeMusic();
+        
+        // Освобождаем ресурсы паузы
+        if (pauseStage != null) {
+            pauseStage.dispose();
+            pauseStage = null;
+        }
+        
+        if (pauseSkin != null) {
+            pauseSkin.dispose();
+            pauseSkin = null;
+        }
     }
 
     @Override
@@ -1550,7 +1566,7 @@ public class GameScreen implements Screen, ControllerListener {
         collectSound.dispose();
         explosionSound.dispose();
         gameMusic.dispose();
-        
+
         // Освобождаем ресурсы UI
         if (gameOverStage != null) gameOverStage.dispose();
         if (gameOverSkin != null) gameOverSkin.dispose();
@@ -1563,7 +1579,7 @@ public class GameScreen implements Screen, ControllerListener {
         speedBoostTexture.dispose();
         magnetTexture.dispose();
         doubleScoreTexture.dispose();
-        
+
         // Удаляем слушателя контроллеров
         Controllers.removeListener(this);
     }
@@ -1663,7 +1679,7 @@ public class GameScreen implements Screen, ControllerListener {
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 initGame();
-                gameMusic.play();
+                game.soundManager.resumeMusic();
                 Gdx.input.setInputProcessor(null);
             }
         });
@@ -1767,125 +1783,133 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Обновление бонусов
     private void updatePowerups(float delta) {
-        // Обновляем активные бонусы
-        if (shieldActive || speedBoostActive || magnetActive || doubleScoreActive) {
-            for (Powerup powerup : powerups) {
-                if (powerup.active) {
-                    powerup.activeTime += delta;
-                    if (powerup.activeTime >= powerup.activeDuration) {
-                        // Деактивируем бонус по окончании времени действия
-                        deactivatePowerup(powerup.type);
-                        powerup.active = false;
+        // Флаг, показывающий, есть ли активные бонусы каждого типа
+        boolean hasActiveShield = false;
+        boolean hasActiveMagnet = false;
+        boolean hasActiveDoubleScore = false;
+
+        // Список бонусов для удаления (истекшие + вышедшие за экран)
+        Array<Powerup> toRemove = new Array<Powerup>();
+
+        // Первый проход: обновляем все активные бонусы и собираем информацию
+        for (int i = 0; i < powerups.size; i++) {
+            Powerup powerup = powerups.get(i);
+
+            if (powerup.active) {
+                // Обновляем время действия активного бонуса
+                powerup.activeTime += delta;
+
+                // Проверяем, не истекло ли время действия
+                if (powerup.activeTime >= powerup.activeDuration) {
+                    // Бонус больше не активен - добавляем в список для удаления
+                    toRemove.add(powerup);
+                } else {
+                    // Отмечаем тип активного бонуса
+                    switch (powerup.type) {
+                        case SHIELD:
+                            hasActiveShield = true;
+                            break;
+                        case MAGNET:
+                            hasActiveMagnet = true;
+                            break;
+                        case DOUBLE_SCORE:
+                            hasActiveDoubleScore = true;
+                            break;
                     }
                 }
-            }
-        }
-
-        // Обновляем движение бонусов
-        for (Iterator<Powerup> iter = powerups.iterator(); iter.hasNext();) {
-            Powerup powerup = iter.next();
-
-            if (!powerup.active) {
-                // Движение бонуса сверху вниз
+            } else {
+                // Неактивный бонус - обновляем его движение
                 powerup.bounds.y -= 200 * delta;
 
-                // Проверка на сбор бонуса
+                // Проверяем, не собрали ли мы его
                 if (powerup.bounds.overlaps(ship)) {
                     // Активируем бонус
-                    activatePowerup(powerup.type);
                     powerup.active = true;
                     powerup.activeTime = 0;
 
-                    // Воспроизводим звук сбора (используем звук сбора топлива)
-                    collectSound.play();
+                    // Вызываем метод активации
+                    activatePowerup(powerup.type);
+
+                    // Отмечаем тип нового активного бонуса
+                    switch (powerup.type) {
+                        case SHIELD:
+                            hasActiveShield = true;
+                            break;
+                        case MAGNET:
+                            hasActiveMagnet = true;
+                            break;
+                        case DOUBLE_SCORE:
+                            hasActiveDoubleScore = true;
+                            break;
+                    }
+
+                    // Деактивируем все другие бонусы того же типа
+                    for (int j = 0; j < powerups.size; j++) {
+                        Powerup existing = powerups.get(j);
+                        if (existing != powerup && existing.active && existing.type == powerup.type) {
+                            // Добавляем в список для удаления
+                            toRemove.add(existing);
+                        }
+                    }
+
+                    // Воспроизводим звук сбора через SoundManager
+                    game.soundManager.playSound(collectSound);
                 }
 
                 // Удаляем бонус, если он ушел за экран
                 if (powerup.bounds.y + powerup.bounds.height < 0) {
-                    iter.remove();
+                    toRemove.add(powerup);
                 }
             }
         }
-    }
 
-    // Активация бонуса
-    private void activatePowerup(PowerupType type) {
-        switch (type) {
-            case SHIELD:
-                shieldActive = true;
-                break;
-            case SPEED_BOOST:
-                speedBoostActive = true;
-                break;
-            case MAGNET:
-                magnetActive = true;
-                break;
-            case DOUBLE_SCORE:
-                doubleScoreActive = true;
-                break;
+        // Удаляем все бонусы из списка удаления
+        for (Powerup p : toRemove) {
+            powerups.removeValue(p, true);
         }
-    }
 
-    // Деактивация бонуса
-    private void deactivatePowerup(PowerupType type) {
-        switch (type) {
-            case SHIELD:
-                shieldActive = false;
-                break;
-            case SPEED_BOOST:
-                speedBoostActive = false;
-                break;
-            case MAGNET:
-                magnetActive = false;
-                break;
-            case DOUBLE_SCORE:
-                doubleScoreActive = false;
-                break;
-        }
+        // Обновляем глобальные флаги бонусов на основе найденных активных бонусов
+        shieldActive = hasActiveShield;
+        magnetActive = hasActiveMagnet;
+        doubleScoreActive = hasActiveDoubleScore;
     }
 
     // Обработка столкновений с астероидами
     private void handleAsteroidCollision(Rectangle asteroid) {
-        // Если активен щит, то не теряем жизнь при столкновении
-        if (!shieldActive) {
-            loseLife();
-        }
-
-        // Удаляем астероид в любом случае
+        // Удаляем астероид
         asteroids.removeValue(asteroid, true);
 
-        // Воспроизводим звук взрыва если звуковые эффекты включены
-        if (game.soundManager.isSfxEnabled()) {
-            explosionSound.play();
+        // Если активен щит, не теряем жизнь
+        if (shieldActive) {
+            // Добавляем очки за "уничтожение" астероида
+            addScore(15);
+            // Воспроизводим звук через SoundManager
+            game.soundManager.playSound(explosionSound, 0.3f, 1.0f, 0.0f);
+            return;
         }
+
+        // Иначе теряем жизнь
+        loseLife();
+        difficultySystem.registerFailure(); // Регистрируем неудачу
     }
 
     // Обработка сбора топлива
     private void handleFuelCollection(Rectangle fuelCanister) {
-        // Добавляем топливо
-        fuel = Math.min(fuel + 25, MAX_FUEL);
-
-        // Увеличиваем счет (снижено до 25 очков)
-        addScore(25);
+        // Воспроизводим звук сбора через SoundManager
+        game.soundManager.playSound(collectSound);
 
         // Удаляем канистру
         fuelCanisters.removeValue(fuelCanister, true);
 
-        // Сообщаем системе сложности об успехе - используем новый метод
-        difficultySystem.registerFuelCollection();
+        // Увеличиваем топливо
+        fuel = Math.min(MAX_FUEL, fuel + 25); // Немного больше топлива за канистру (было 20)
+        fuelCollected++; // Увеличиваем счетчик собранного топлива
 
-        // Воспроизводим звук сбора если звуковые эффекты включены
-        if (game.soundManager.isSfxEnabled()) {
-            collectSound.play();
-        }
-
-        // Увеличиваем счетчик собранного топлива для достижения
-        fuelCollected++;
-
-        // Проверяем достижение "Собрать 50 канистр с топливом"
-        if (game.achievementSystem.updateProgress(AchievementSystem.ACHIEVEMENT_COLLECT_50_FUEL, fuelCollected) && fuelCollected >= 50) {
-            showAchievementNotification("Достижение разблокировано: Заправщик");
-        }
+        // Добавляем очки за сбор топлива - используем метод addScore
+        addScore(20);
+        
+        // Отмечаем успех для системы сложности
+        difficultySystem.registerSuccess();
     }
 
     // Добавление очков с учетом бонуса двойных очков
@@ -1941,7 +1965,6 @@ public class GameScreen implements Screen, ControllerListener {
     private Texture getPowerupTexture(PowerupType type) {
         switch (type) {
             case SHIELD: return shieldTexture;
-            case SPEED_BOOST: return speedBoostTexture;
             case MAGNET: return magnetTexture;
             case DOUBLE_SCORE: return doubleScoreTexture;
             default: return shieldTexture; // По умолчанию
@@ -2296,10 +2319,8 @@ public class GameScreen implements Screen, ControllerListener {
         // Сохраняем время для атак босса
         lastBossAttackTime = TimeUtils.nanoTime();
 
-        // Воспроизводим звук появления (используем существующий звук)
-        if (game.soundManager.isSfxEnabled()) {
-            explosionSound.play(0.7f);
-        }
+        // Воспроизводим звук появления через SoundManager
+        game.soundManager.playSound(explosionSound, 0.7f, 0.9f, 0.0f);
     }
 
     /**
@@ -2359,7 +2380,7 @@ public class GameScreen implements Screen, ControllerListener {
             playerProjectiles.clear();
 
             // Добавляем очки за победу
-            score += 2000;
+            addScore(2000);
 
             // Показываем анимацию
             showLevelUpAnimation = true;
@@ -2497,35 +2518,32 @@ public class GameScreen implements Screen, ControllerListener {
      * Обновляет снаряды босса
      */
     private void updateBossProjectiles(float delta) {
-        // Обрабатываем каждый снаряд
         for (Iterator<BossProjectile> iter = bossProjectiles.iterator(); iter.hasNext();) {
             BossProjectile projectile = iter.next();
 
             // Обновляем позицию снаряда
             projectile.update(delta);
 
-            // Проверяем столкновение с кораблем
+            // Если снаряд вышел за пределы экрана, удаляем его
+            if (projectile.isOutOfScreen()) {
+                iter.remove();
+                continue;
+            }
+
+            // Проверка столкновения с кораблем
             if (projectile.bounds.overlaps(ship)) {
-                // Если нет щита, наносим урон
+                // Если активен щит, то не теряем жизнь при столкновении
                 if (!shieldActive) {
                     loseLife();
-                    difficultySystem.registerFailure(); // Регистрируем неудачу
                 }
 
                 // Удаляем снаряд при попадании
                 iter.remove();
 
-                // Воспроизводим звук взрыва если звуковые эффекты включены
+                // Воспроизводим звук взрыва
                 if (game.soundManager.isSfxEnabled()) {
                     explosionSound.play(0.5f);
                 }
-
-                continue;
-            }
-
-            // Удаляем снаряды за пределами экрана
-            if (projectile.isOutOfScreen()) {
-                iter.remove();
             }
         }
     }
@@ -2625,7 +2643,7 @@ public class GameScreen implements Screen, ControllerListener {
     private void initializeControllers() {
         // Регистрируем слушателя контроллеров
         Controllers.addListener(this);
-        
+
         // Проверяем, подключен ли контроллер
         if (Controllers.getControllers().size > 0) {
             activeController = Controllers.getControllers().first();
@@ -2651,7 +2669,7 @@ public class GameScreen implements Screen, ControllerListener {
             activeController = null;
             controllerConnected = false;
             Gdx.app.log("GameScreen", "Controller disconnected");
-            
+
             // Если есть другие контроллеры, используем первый доступный
             if (Controllers.getControllers().size > 0) {
                 activeController = Controllers.getControllers().first();
@@ -2672,7 +2690,7 @@ public class GameScreen implements Screen, ControllerListener {
             }
             return true;
         }
-        
+
         return false;
     }
 
@@ -2684,5 +2702,83 @@ public class GameScreen implements Screen, ControllerListener {
     @Override
     public boolean axisMoved(Controller controller, int axisCode, float value) {
         return false;
+    }
+
+    /**
+     * Создает случайный бонус
+     */
+    private void spawnRandomPowerup() {
+        // Выбираем тип бонуса - стараемся выбрать тип, отличный от текущих активных бонусов
+        PowerupType[] types = PowerupType.values();
+
+        // Флаг, показывающий, найден ли подходящий тип бонуса
+        boolean foundType = false;
+        PowerupType selectedType = null;
+
+        // Пытаемся найти тип бонуса, который еще не активен
+        for (int attempt = 0; attempt < 3; attempt++) { // Делаем несколько попыток
+            PowerupType randomType = types[MathUtils.random(types.length - 1)];
+
+            // Проверяем, что этот тип бонуса не активен
+            boolean isTypeActive = false;
+            switch (randomType) {
+                case SHIELD:
+                    isTypeActive = shieldActive;
+                    break;
+                case MAGNET:
+                    isTypeActive = magnetActive;
+                    break;
+                case DOUBLE_SCORE:
+                    isTypeActive = doubleScoreActive;
+                    break;
+            }
+
+            // Если этот тип не активен, выбираем его
+            if (!isTypeActive) {
+                selectedType = randomType;
+                foundType = true;
+                break;
+            }
+        }
+
+        // Если не удалось найти неактивный тип, выбираем случайный
+        if (!foundType) {
+            selectedType = types[MathUtils.random(types.length - 1)];
+        }
+
+        // Создаем бонус и добавляем его в коллекцию
+        float x = MathUtils.random(0, GAME_WIDTH - POWERUP_SIZE);
+        float y = GAME_HEIGHT;
+        powerups.add(new Powerup(x, y, selectedType));
+    }
+
+    // Активация бонуса
+    private void activatePowerup(PowerupType type) {
+        switch (type) {
+            case SHIELD:
+                shieldActive = true;
+                break;
+            case MAGNET:
+                magnetActive = true;
+                break;
+            case DOUBLE_SCORE:
+                doubleScoreActive = true;
+                break;
+        }
+    }
+
+    // Деактивация бонуса
+    private void deactivatePowerup(PowerupType type) {
+        switch (type) {
+            case SHIELD:
+                shieldActive = false;
+                break;
+            case MAGNET:
+                magnetActive = false;
+                break;
+            case DOUBLE_SCORE:
+                doubleScoreActive = false;
+                break;
+        }
     }
 }

@@ -1,18 +1,28 @@
 package com.badlogic.drop.android;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.os.Build;
+import android.widget.Toast;
 
 import com.badlogic.drop.SpaceCourierGame;
+import com.badlogic.drop.android.GoogleAuthManager.AuthCallback;
+import com.badlogic.drop.util.GoogleAuthInterface;
 import com.badlogic.gdx.backends.android.AndroidApplication;
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
+import com.google.firebase.auth.FirebaseUser;
 
 /** 
  * Лаунчер для Android-версии игры, оптимизированный для Samsung Galaxy S24 Ultra 
  */
-public class AndroidLauncher extends AndroidApplication {
+public class AndroidLauncher extends AndroidApplication implements AuthCallback, GoogleAuthInterface {
+    private static final String TAG = "AndroidLauncher";
+    private GoogleAuthManager authManager;
+    private SpaceCourierGame game;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,6 +50,9 @@ public class AndroidLauncher extends AndroidApplication {
             getWindow().getDecorView().setSystemUiVisibility(flags);
         }
         
+        // Инициализируем менеджер авторизации Google
+        authManager = new GoogleAuthManager(this);
+        
         // Создаем и настраиваем конфигурацию для Android
         AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
         
@@ -61,7 +74,83 @@ public class AndroidLauncher extends AndroidApplication {
         // Устанавливаем буфер глубины
         config.depth = 16;              // 16-битный буфер глубины
         
-        // Инициализируем игру с конфигурацией
-        initialize(new SpaceCourierGame(), config);
+        // Инициализируем игру с конфигурацией и передаем ей интерфейс для авторизации
+        game = new SpaceCourierGame();
+        // Устанавливаем интерфейс Google Auth
+        game.setGoogleAuthInterface(this);
+        initialize(game, config);
+    }
+    
+    // --- Реализация интерфейса GoogleAuthInterface ---
+    
+    @Override
+    public void signIn() {
+        runOnUiThread(() -> {
+            authManager.signIn(this);
+        });
+    }
+    
+    @Override
+    public void signOut() {
+        runOnUiThread(() -> {
+            authManager.signOut();
+            Toast.makeText(this, "Выход выполнен", Toast.LENGTH_SHORT).show();
+        });
+    }
+    
+    @Override
+    public boolean isSignedIn() {
+        return authManager.isSignedIn();
+    }
+    
+    @Override
+    public String getUserName() {
+        FirebaseUser user = authManager.getCurrentUser();
+        return user != null ? user.getDisplayName() : null;
+    }
+    
+    @Override
+    public String getUserEmail() {
+        FirebaseUser user = authManager.getCurrentUser();
+        return user != null ? user.getEmail() : null;
+    }
+    
+    @Override
+    public String getUserPhotoUrl() {
+        FirebaseUser user = authManager.getCurrentUser();
+        return user != null && user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : null;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        // Передаем результат активности в менеджер аутентификации
+        authManager.handleActivityResult(requestCode, resultCode, data);
+    }
+    
+    // --- Реализация интерфейса AuthCallback ---
+    
+    @Override
+    public void onAuthSuccess(FirebaseUser user) {
+        Log.d(TAG, "Вход выполнен успешно: " + user.getDisplayName());
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Добро пожаловать, " + user.getDisplayName(), Toast.LENGTH_SHORT).show();
+            // Уведомляем игру о успешном входе
+            if (game != null) {
+                game.onGoogleSignInSuccess(user.getDisplayName(), user.getEmail());
+            }
+        });
+    }
+    
+    @Override
+    public void onAuthFailure(Exception exception) {
+        Log.e(TAG, "Ошибка входа", exception);
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Ошибка входа: " + exception.getMessage(), Toast.LENGTH_SHORT).show();
+            // Уведомляем игру об ошибке входа
+            if (game != null) {
+                game.onGoogleSignInFailure(exception.getMessage());
+            }
+        });
     }
 }

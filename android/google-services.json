@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1051336094878",
+    "project_id": "space-travel-d2692",
+    "storage_bucket": "space-travel-d2692.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1051336094878:android:79794e46e34eb98da2778f",
+        "android_client_info": {
+          "package_name": "com.badlogic.drop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1051336094878-m14of6cbr1scr46g2ushomv8mjthtldo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.badlogic.drop",
+            "certificate_hash": "052fa9aba36a43a8421f23855a3f53f3246765b7"
+          }
+        },
+        {
+          "client_id": "1051336094878-kq3593rbem64qv7r9eu11fsoucrccpf6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZnvJBrUzJRqnEJ33tI0w9SCHrQ9-OBbA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1051336094878-kq3593rbem64qv7r9eu11fsoucrccpf6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
