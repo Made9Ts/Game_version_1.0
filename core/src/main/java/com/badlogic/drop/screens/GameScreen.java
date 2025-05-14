@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
@@ -26,7 +27,6 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import java.util.Iterator;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.drop.systems.AchievementSystem;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.GL20;
@@ -946,6 +946,119 @@ public class GameScreen implements Screen, ControllerListener {
         game.batch.setColor(1, 1, 1, 1);
     }
 
+    /**
+     * Проверяет столкновения между всеми объектами и разрешает их
+     */
+    private void resolveAllCollisions() {
+        // Проверяем столкновения между астероидами
+        for (int i = 0; i < asteroids.size; i++) {
+            Rectangle asteroid1 = asteroids.get(i);
+            
+            // Проверяем столкновения с другими астероидами (только с астероидами с большим индексом)
+            for (int j = i + 1; j < asteroids.size; j++) {
+                Rectangle asteroid2 = asteroids.get(j);
+                resolveCollision(asteroid1, asteroid2);
+            }
+            
+            // Проверяем столкновения с врагами
+            for (Rectangle enemy : enemies) {
+                resolveCollision(asteroid1, enemy);
+            }
+            
+            // Проверяем столкновения с топливом
+            for (Rectangle fuel : fuelCanisters) {
+                resolveCollision(asteroid1, fuel);
+            }
+            
+            // Проверяем столкновения с сердечками
+            for (Rectangle heart : hearts) {
+                resolveCollision(asteroid1, heart);
+            }
+            
+            // Проверяем столкновения со снарядами босса - снаряды уничтожаются при столкновении с астероидами
+            for (Iterator<BossProjectile> iter = bossProjectiles.iterator(); iter.hasNext();) {
+                BossProjectile projectile = iter.next();
+                if (checkSmoothCollision(asteroid1, projectile.bounds, 0.9f)) {
+                    iter.remove();
+                    // Возможно, воспроизведение звука столкновения
+                    game.soundManager.playSound(explosionSound, 0.2f, 1.0f, 0.0f);
+                    break;
+                }
+            }
+        }
+        
+        // Проверяем столкновения между врагами
+        for (int i = 0; i < enemies.size; i++) {
+            Rectangle enemy1 = enemies.get(i);
+            
+            // Проверяем столкновения с другими врагами (только с врагами с большим индексом)
+            for (int j = i + 1; j < enemies.size; j++) {
+                Rectangle enemy2 = enemies.get(j);
+                resolveCollision(enemy1, enemy2);
+            }
+            
+            // Проверяем столкновения с топливом
+            for (Rectangle fuel : fuelCanisters) {
+                resolveCollision(enemy1, fuel);
+            }
+            
+            // Проверяем столкновения с сердечками
+            for (Rectangle heart : hearts) {
+                resolveCollision(enemy1, heart);
+            }
+            
+            // Проверяем столкновения со снарядами босса - снаряды просто проходят через врагов
+        }
+        
+        // Проверяем столкновения между топливом
+        for (int i = 0; i < fuelCanisters.size; i++) {
+            Rectangle fuel1 = fuelCanisters.get(i);
+            
+            // Проверяем столкновения с другим топливом (только с топливом с большим индексом)
+            for (int j = i + 1; j < fuelCanisters.size; j++) {
+                Rectangle fuel2 = fuelCanisters.get(j);
+                resolveCollision(fuel1, fuel2);
+            }
+            
+            // Проверяем столкновения с сердечками
+            for (Rectangle heart : hearts) {
+                resolveCollision(fuel1, heart);
+            }
+        }
+        
+        // Проверяем столкновения между сердечками
+        for (int i = 0; i < hearts.size; i++) {
+            Rectangle heart1 = hearts.get(i);
+            
+            // Проверяем столкновения с другими сердечками (только с сердечками с большим индексом)
+            for (int j = i + 1; j < hearts.size; j++) {
+                Rectangle heart2 = hearts.get(j);
+                resolveCollision(heart1, heart2);
+            }
+        }
+        
+        // Проверяем столкновения между снарядами игрока и снарядами босса
+        for (Iterator<PlayerProjectile> playerIter = playerProjectiles.iterator(); playerIter.hasNext();) {
+            PlayerProjectile playerProjectile = playerIter.next();
+            
+            for (Iterator<BossProjectile> bossIter = bossProjectiles.iterator(); bossIter.hasNext();) {
+                BossProjectile bossProjectile = bossIter.next();
+                
+                if (checkSmoothCollision(playerProjectile.bounds, bossProjectile.bounds, 0.9f)) {
+                    // При столкновении уничтожаем оба снаряда
+                    playerIter.remove();
+                    bossIter.remove();
+                    
+                    // Звук столкновения
+                    game.soundManager.playSound(explosionSound, 0.2f, 1.3f, 0.0f);
+                    
+                    // Выходим из внутреннего цикла, так как снаряд игрока уже уничтожен
+                    break;
+                }
+            }
+        }
+    }
+
     private void updateGame(float delta) {
         // Обновляем время игры
         gameTime += delta;
@@ -1064,11 +1177,17 @@ public class GameScreen implements Screen, ControllerListener {
         // Увеличение сложности с течением времени
         difficultySystem.update(score, delta);
 
-        // Обновление движения объектов
+        // Сначала обновляем движение всех объектов
         updateAsteroids(delta, difficulty);
         updateEnemies(delta, difficulty);
         updateFuelCanisters(delta);
         updateHearts(delta); // Обновление сердечек
+
+        // Затем проверяем и разрешаем все возможные столкновения между объектами
+        resolveAllCollisions();
+        
+        // Проверяем и удаляем застрявшие объекты
+        checkForStuckObjects();
 
         // Применяем магнитное притяжение, если активно
         applyMagneticEffect(delta);
@@ -1102,341 +1221,127 @@ public class GameScreen implements Screen, ControllerListener {
         }
     }
 
-    /**
-     * Обрабатывает ввод пользователя
-     */
-    private void handleInput(float delta) {
-        // Обработка клавиши Escape для паузы
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
-            if (isPaused) {
-                resumeGame();
+    private void updateAsteroids(float delta, float difficulty) {
+        Iterator<Rectangle> iter = asteroids.iterator();
+        while (iter.hasNext()) {
+            Rectangle asteroid = iter.next();
+            
+            // Если астероид находится в нижней части экрана, ускоряем его падение
+            // и добавляем небольшие случайные импульсы, чтобы избежать застревания
+            if (asteroid.y < 50) {
+                asteroid.y -= (100 + difficulty * 30) * delta; // Увеличенная скорость
+                
+                // Добавляем небольшое случайное движение по X, чтобы избежать скопления
+                asteroid.x += MathUtils.random(-30, 30) * delta;
             } else {
-                pauseGame();
-            }
-            return; // Выходим из метода, чтобы не обрабатывать другие клавиши
-        }
-
-        // Проверка касания кнопки паузы (обработка до других действий)
-        if (!gameOver && Gdx.input.justTouched()) {
-            Vector3 touchPos = new Vector3();
-            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(touchPos);
-
-            // Отладочная информация о позиции касания
-            Gdx.app.debug("GameScreen", "Touch at X:" + touchPos.x + " Y:" + touchPos.y);
-            Gdx.app.debug("GameScreen", "Pause button at X:" + pauseButtonRect.x + " Y:" + pauseButtonRect.y +
-                         " Width:" + pauseButtonRect.width + " Height:" + pauseButtonRect.height);
-
-            // Проверяем, было ли касание по кнопке паузы
-            if (touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
-                touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height) {
-
-                Gdx.app.log("GameScreen", "Pause button touched");
-
-                if (isPaused) {
-                    resumeGame();
-                } else {
-                    pauseGame();
-                }
-                return; // Выходим из метода, чтобы не обрабатывать другие касания
-            }
-        }
-
-        // Проверка на стрельбу (только при битве с боссом)
-        if (bossActive && !isPaused && !gameOver) {
-            boolean shouldShoot = false;
-
-            // Проверка удержания пальца на экране (непрерывная стрельба)
-            if (Gdx.input.isTouched()) {
-                // Получаем позицию касания
-                Vector3 touchPos = new Vector3();
-                touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
-                camera.unproject(touchPos);
-
-                // Проверяем, что касание не на кнопке паузы
-                if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
-                    touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
-                    shouldShoot = true;
-                }
+                // Обычное движение вниз
+                asteroid.y -= (100 + difficulty * 20) * delta;
             }
 
-            // Проверка нажатия пробела (непрерывная стрельба)
-            if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
-                shouldShoot = true;
-            }
-
-            // Проверка контроллера для стрельбы
-            if (controllerConnected && activeController != null) {
-                // Проверяем кнопку A (Xbox) или X (PlayStation) - обычно кнопка 0
-                if (activeController.getButton(0)) {
-                    shouldShoot = true;
-                }
-            }
-
-            // Если нужно стрелять и прошло достаточно времени с последнего выстрела
-            if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
-                playerShoot();
-            }
-        }
-
-        // Переменные для хранения движения
-        float moveX = 0;
-        float moveY = 0;
-
-        // Обработка сенсорного ввода для движения корабля
-        if (Gdx.input.isTouched()) {
-            // Если игра на паузе, не обрабатываем движения
-            if (isPaused || gameOver) return;
-
-            Vector3 touchPos = new Vector3();
-            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(touchPos);
-
-            // Улучшенное управление: постепенное движение к позиции касания для плавности
-            float targetX = touchPos.x - SHIP_SIZE / 2;
-            float targetY = touchPos.y - SHIP_SIZE / 2;
-            float moveStep = SHIP_SPEED * 1.5f * delta; // Увеличиваем скорость реакции
-
-            // Двигаемся плавно к точке касания по X
-            if (Math.abs(ship.x - targetX) <= moveStep) {
-                ship.x = targetX; // Если уже близко, просто устанавливаем позицию
-            } else if (ship.x < targetX) {
-                ship.x += moveStep;
-            } else {
-                ship.x -= moveStep;
-            }
-
-            // Двигаемся плавно к точке касания по Y
-            if (Math.abs(ship.y - targetY) <= moveStep) {
-                ship.y = targetY; // Если уже близко, просто устанавливаем позицию
-            } else if (ship.y < targetY) {
-                ship.y += moveStep;
-            } else {
-                ship.y -= moveStep;
-            }
-        } else {
-            // Если игра на паузе, не обрабатываем движения
-            if (isPaused || gameOver) return;
-
-            // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
-            // Определяем направление движения по осям X и Y
-            if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1;
-
-            // Обработка контроллера для движения, если он подключен
-            if (controllerConnected && activeController != null) {
-                // Получаем значения левого стика
-                float axisX = activeController.getAxis(0); // Обычно горизонтальная ось левого стика
-                float axisY = -activeController.getAxis(1); // Обычно вертикальная ось левого стика (инвертируем)
-
-                // Применяем мертвую зону к стикам
-                if (Math.abs(axisX) > CONTROLLER_DEADZONE) {
-                    moveX += axisX;
-                }
-
-                if (Math.abs(axisY) > CONTROLLER_DEADZONE) {
-                    moveY += axisY;
-                }
-
-                // Проверяем D-pad (крестовину)
-                // В разных контроллерах могут быть разные индексы кнопок
-                // Пробуем наиболее распространенные варианты
-
-                // Вариант 1: кнопки 11-14 для D-pad
-                if (activeController.getButton(11)) moveX -= 1; // Влево
-                if (activeController.getButton(12)) moveX += 1; // Вправо
-                if (activeController.getButton(13)) moveY += 1; // Вверх
-                if (activeController.getButton(14)) moveY -= 1; // Вниз
-
-                // Вариант 2: альтернативные индексы для D-pad
-                if (activeController.getButton(4)) moveY += 1; // Вверх
-                if (activeController.getButton(5)) moveY -= 1; // Вниз
-                if (activeController.getButton(6)) moveX -= 1; // Влево
-                if (activeController.getButton(7)) moveX += 1; // Вправо
-            }
-
-            // Если движемся по диагонали, нормализуем скорость
-            if (moveX != 0 && moveY != 0) {
-                // Нормализация для диагонального движения (чтобы суммарная скорость не превышала SHIP_SPEED)
-                float length = (float) Math.sqrt(moveX * moveX + moveY * moveY);
-                moveX /= length;
-                moveY /= length;
-            }
-
-            // Перемещаем корабль с постоянной скоростью
-            ship.x += moveX * SHIP_SPEED * delta;
-            ship.y += moveY * SHIP_SPEED * delta;
-        }
-
-        // Ограничения положения корабля по X
-        if (ship.x < 0) ship.x = 0;
-        if (ship.x > GAME_WIDTH - SHIP_SIZE) ship.x = GAME_WIDTH - SHIP_SIZE;
-
-        // Ограничения положения корабля по Y
-        if (ship.y < 0) ship.y = 0;
-        if (ship.y > GAME_HEIGHT - SHIP_SIZE) ship.y = GAME_HEIGHT - SHIP_SIZE;
-    }
-
-    /**
-     * Игрок выполняет выстрел
-     */
-    private void playerShoot() {
-        // Проверяем, прошло ли достаточно времени с последнего выстрела
-        if (TimeUtils.nanoTime() - lastPlayerShootTime < PLAYER_SHOOT_COOLDOWN) {
-            return;
-        }
-
-        // Вычисляем позицию для снаряда (центр корабля)
-        float projectileX = ship.x + ship.width / 2 - PLAYER_PROJECTILE_SIZE / 2;
-        float projectileY = ship.y + ship.height;
-
-        // Добавляем снаряд в коллекцию
-        playerProjectiles.add(new PlayerProjectile(projectileX, projectileY));
-
-        // Запоминаем время выстрела
-        lastPlayerShootTime = TimeUtils.nanoTime();
-
-        // Звук выстрела через SoundManager
-        game.soundManager.playSound(collectSound, 0.3f, 1.0f, 0.0f);
-    }
-
-    /**
-     * Обновляет снаряды игрока
-     */
-    private void updatePlayerProjectiles(float delta) {
-        // Если босс не активен, снаряды игрока не нужны
-        if (!bossActive) {
-            playerProjectiles.clear();
-            return;
-        }
-
-        // Обрабатываем каждый снаряд
-        for (Iterator<PlayerProjectile> iter = playerProjectiles.iterator(); iter.hasNext();) {
-            PlayerProjectile projectile = iter.next();
-
-            // Обновляем позицию снаряда
-            projectile.update(delta);
-
-            // Проверяем столкновение с боссом
-            if (boss != null && projectile.bounds.overlaps(boss)) {
-                // Наносим урон боссу
-                damageBoss();
-
-                // Удаляем снаряд при попадании
+            // Если астероид ушел за край экрана
+            if (asteroid.y + ASTEROID_SIZE < 0) {
                 iter.remove();
-
-                // Добавляем очки за попадание
-                addScore(50);
-
-                // Воспроизводим звук попадания через SoundManager
-                game.soundManager.playSound(explosionSound, 0.3f, 1.0f, 0.0f);
-
+                addScore(15);
+                difficultySystem.registerSuccess();
                 continue;
             }
 
-            // Удаляем снаряды за пределами экрана
-            if (projectile.isOutOfScreen()) {
+            // Используем обтекаемые хитбоксы для столкновения с кораблем
+            if (checkSmoothCollision(asteroid, ship, 0.85f)) {
+                // Удаляем астероид перед обработкой столкновения
                 iter.remove();
-            }
-        }
-    }
-
-    private void updateAsteroids(float delta, float difficulty) {
-        for (Iterator<Rectangle> iter = asteroids.iterator(); iter.hasNext(); ) {
-            Rectangle asteroid = iter.next();
-            // Падение астероидов сверху вниз с учетом сложности
-            // Увеличена базовая скорость астероидов и её зависимость от сложности
-            asteroid.y -= (120 + 35 * difficulty) * delta; // Увеличено с 100+25 до 120+35
-
-            // Удаление астероидов, вышедших за пределы экрана
-            if (asteroid.y + ASTEROID_SIZE < 0) {
-                iter.remove();
-                addScore(10); // Очки за уклонение от астероида - используем метод addScore
-                // Используем специализированный метод для уклонения
-                difficultySystem.registerDodge();
-            }
-
-            // Проверка столкновения астероида с боссом
-            if (bossActive && asteroid.y > GAME_HEIGHT / 2) {
-                if (asteroid.overlaps(boss)) {
-                    // Наносим урон боссу
-                    damageBoss();
-
-                    // Удаляем астероид
-                    iter.remove();
-
-                    // Добавляем очки за попадание
-                    addScore(50);
-
-                    // Регистрируем успех
-                    difficultySystem.registerSuccess();
-
-                    // Воспроизводим звук
-                    if (game.soundManager.isSfxEnabled()) {
-                        explosionSound.play(0.3f);
-                    }
-
-                    continue; // Переходим к следующему астероиду
-                }
-            }
-
-            // Обработка столкновения с кораблем
-            if (asteroid.overlaps(ship)) {
+                // Обрабатываем столкновение (без повторного удаления)
                 handleAsteroidCollision(asteroid);
             }
         }
     }
 
     private void updateEnemies(float delta, float difficulty) {
-        for (Iterator<Rectangle> iter = enemies.iterator(); iter.hasNext(); ) {
+        Iterator<Rectangle> iter = enemies.iterator();
+        while (iter.hasNext()) {
             Rectangle enemy = iter.next();
-            // Движение врагов сверху вниз с учетом сложности
-            // Увеличена базовая скорость врагов и её зависимость от сложности
-            enemy.y -= (150 + 45 * difficulty) * delta; // Увеличено с 120+35 до 150+45
+            
+            // Если враг находится в нижней части экрана, ускоряем его и добавляем случайное движение
+            if (enemy.y < 50) {
+                enemy.y -= (100 + difficulty * 35) * delta; // Увеличенная скорость
+                
+                // Более сильное случайное движение по X
+                enemy.x += MathUtils.random(-40, 40) * delta;
+            } else {
+                // Движение врага вниз и в сторону игрока
+                enemy.y -= (100 + difficulty * 25) * delta;
 
-            // Движение врагов влево-вправо, следуя за кораблем (более разумное преследование)
-            // Увеличена скорость преследования
-            if (enemy.x < ship.x) enemy.x += (50 + 8 * difficulty) * delta; // Увеличено с 40+6 до 50+8
-            if (enemy.x > ship.x) enemy.x -= (50 + 8 * difficulty) * delta; // Увеличено с 40+6 до 50+8
-
-            // Удаление врагов, вышедших за пределы экрана
-            if (enemy.y + ENEMY_SIZE < 0) {
-                iter.remove();
-                addScore(30); // Больше очков за уклонение от врага - используем метод addScore
-                // Используем специализированный метод для уклонения
-                difficultySystem.registerDodge();
+                // Следование за игроком
+                if (enemy.x + enemy.width/2 < ship.x + ship.width/2) {
+                    enemy.x += (60 + difficulty * 15) * delta;
+                } else {
+                    enemy.x -= (60 + difficulty * 15) * delta;
+                }
             }
 
-            // Обработка столкновения с кораблем
-            if (enemy.overlaps(ship)) {
-                // Воспроизводим звук через SoundManager
-                game.soundManager.playSound(explosionSound);
+            // Если враг улетел за пределы экрана
+            if (enemy.y + ENEMY_SIZE < 0) {
                 iter.remove();
-                // Если активен щит, то не теряем жизнь при столкновении
+                addScore(25);
+                difficultySystem.registerSuccess();
+                continue;
+            }
+
+            // Проверка столкновения с игроком с использованием обтекаемых хитбоксов
+            if (checkSmoothCollision(enemy, ship, 0.8f)) {
+                // Удаляем врага здесь, чтобы избежать двойного удаления
+                iter.remove();
                 if (!shieldActive) {
                     loseLife();
-                    difficultySystem.registerFailure(); // Регистрируем неудачу
+                    difficultySystem.registerFailure();
+                } else {
+                    // Если есть щит, просто добавляем очки
+                    addScore(25);
                 }
+                game.soundManager.playSound(explosionSound, 0.5f, 1.0f, 0.0f);
             }
         }
     }
 
     private void updateFuelCanisters(float delta) {
-        for (Iterator<Rectangle> iter = fuelCanisters.iterator(); iter.hasNext(); ) {
+        Iterator<Rectangle> iter = fuelCanisters.iterator();
+        while (iter.hasNext()) {
             Rectangle fuelCanister = iter.next();
-            // Падение канистр с топливом сверху вниз
-            fuelCanister.y -= 120 * delta;
-
-            // Удаление канистр, вышедших за пределы экрана
-            if (fuelCanister.y + FUEL_SIZE < 0) {
-                iter.remove();
+            
+            // Если топливо находится в нижней части экрана, ускоряем его и добавляем случайное движение
+            if (fuelCanister.y < 50) {
+                fuelCanister.y -= 120 * delta; // Увеличенная скорость
+                
+                // Добавляем случайное движение по X для избежания скопления
+                fuelCanister.x += MathUtils.random(-20, 20) * delta;
+            } else {
+                fuelCanister.y -= 80 * delta;
             }
 
-            // Обработка сбора канистры с топливом
-            if (fuelCanister.overlaps(ship)) {
-                handleFuelCollection(fuelCanister);
+            // Если канистра ушла за пределы экрана
+            if (fuelCanister.y + FUEL_SIZE < 0) {
+                iter.remove();
+                continue;
+            }
+
+            // Проверяем сбор топлива игроком с использованием более обтекаемых хитбоксов
+            if (checkSmoothCollision(fuelCanister, ship, 0.9f) || 
+                (magnetActive && checkMagneticEffect(fuelCanister, ship, 150f))) {
+                // Удаляем канистру из итератора
+                iter.remove();
+                // Обрабатываем сбор топлива (без повторного удаления)
+                // Воспроизводим звук сбора через SoundManager
+                game.soundManager.playSound(collectSound);
+                
+                // Увеличиваем топливо
+                fuel = Math.min(MAX_FUEL, fuel + 25);
+                fuelCollected++;
+                
+                // Добавляем очки за сбор топлива
+                addScore(20);
+                
+                // Отмечаем успех для системы сложности
+                difficultySystem.registerSuccess();
             }
         }
     }
@@ -1445,29 +1350,41 @@ public class GameScreen implements Screen, ControllerListener {
      * Обновляет движение и сбор сердечек
      */
     private void updateHearts(float delta) {
-        for (Iterator<Rectangle> iter = hearts.iterator(); iter.hasNext(); ) {
+        Iterator<Rectangle> iter = hearts.iterator();
+        while (iter.hasNext()) {
             Rectangle heart = iter.next();
-            // Падение сердечек сверху вниз
-            heart.y -= 150 * delta; // Немного быстрее топлива
-
-            // Удаление сердечек, вышедших за пределы экрана
-            if (heart.y + HEART_SIZE < 0) {
-                iter.remove();
+            
+            // Если сердечко находится в нижней части экрана, ускоряем его и добавляем случайное движение
+            if (heart.y < 50) {
+                heart.y -= 120 * delta; // Увеличенная скорость
+                
+                // Добавляем случайное движение по X для избежания скопления
+                heart.x += MathUtils.random(-20, 20) * delta;
+            } else {
+                heart.y -= 80 * delta;
             }
 
-            // Обработка сбора сердечка
-            if (heart.overlaps(ship)) {
-                // Воспроизводим звук сбора через SoundManager
-                game.soundManager.playSound(collectSound);
-
+            // Если сердце ушло за пределы экрана
+            if (heart.y + HEART_SIZE < 0) {
                 iter.remove();
-                if (lives < 3) { // Проверка, что не превышаем максимум жизней
+                continue;
+            }
+
+            // Проверяем сбор сердца игроком с использованием более обтекаемых хитбоксов
+            if (checkSmoothCollision(heart, ship, 0.9f) || 
+                (magnetActive && checkMagneticEffect(heart, ship, 150f))) {
+                // Удаляем сердце из итератора
+                iter.remove();
+                
+                // Обрабатываем сбор сердца
+                if (lives < MAX_LIVES) {
                     lives++;
-                    if (lives >= 3) {
-                        needHeart = false; // Жизни восстановлены до максимума
-                    }
+                    game.soundManager.playSound(collectSound, 0.5f, 1.0f, 0.0f);
+                    needHeart = false;
+                } else {
+                    // Если жизни уже максимум, даем очки
+                    addScore(50);
                 }
-                addScore(50); // Бонусные очки за сбор сердечка - используем метод addScore
             }
         }
     }
@@ -1876,8 +1793,9 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Обработка столкновений с астероидами
     private void handleAsteroidCollision(Rectangle asteroid) {
-        // Удаляем астероид
-        asteroids.removeValue(asteroid, true);
+        // Не удаляем астероид здесь, так как это уже делается в updateAsteroids
+        // через метод iter.remove()
+        // asteroids.removeValue(asteroid, true); - удаляем эту строку
 
         // Если активен щит, не теряем жизнь
         if (shieldActive) {
@@ -2530,20 +2448,21 @@ public class GameScreen implements Screen, ControllerListener {
                 continue;
             }
 
-            // Проверка столкновения с кораблем
-            if (projectile.bounds.overlaps(ship)) {
+            // Проверка столкновения с кораблем с использованием обтекаемых хитбоксов
+            if (checkSmoothCollision(projectile.bounds, ship, 0.85f)) {
                 // Если активен щит, то не теряем жизнь при столкновении
                 if (!shieldActive) {
                     loseLife();
+                } else {
+                    // Если активен щит, добавляем немного очков за "уничтожение" снаряда
+                    addScore(10);
                 }
 
                 // Удаляем снаряд при попадании
                 iter.remove();
 
                 // Воспроизводим звук взрыва
-                if (game.soundManager.isSfxEnabled()) {
-                    explosionSound.play(0.5f);
-                }
+                game.soundManager.playSound(explosionSound, 0.5f, 1.0f, 0.0f);
             }
         }
     }
@@ -2779,6 +2698,427 @@ public class GameScreen implements Screen, ControllerListener {
             case DOUBLE_SCORE:
                 doubleScoreActive = false;
                 break;
+        }
+    }
+
+    /**
+     * Проверяет столкновение между двумя объектами с использованием более обтекаемых хитбоксов.
+     * Вместо прямоугольников используется расстояние между центрами объектов и радиусы.
+     * 
+     * @param obj1 первый объект
+     * @param obj2 второй объект
+     * @param collisionFactor множитель для настройки "обтекаемости" хитбоксов (< 1.0f для меньшего хитбокса)
+     * @return true, если объекты столкнулись
+     */
+    private boolean checkSmoothCollision(Rectangle obj1, Rectangle obj2, float collisionFactor) {
+        // Рассчитываем центры объектов
+        float centerX1 = obj1.x + obj1.width / 2;
+        float centerY1 = obj1.y + obj1.height / 2;
+        float centerX2 = obj2.x + obj2.width / 2;
+        float centerY2 = obj2.y + obj2.height / 2;
+        
+        // Рассчитываем расстояние между центрами
+        float dx = centerX1 - centerX2;
+        float dy = centerY1 - centerY2;
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        
+        // Рассчитываем сумму радиусов (с учетом множителя для обтекаемости)
+        // Используем меньшую из сторон объекта для более точного хитбокса
+        float radius1 = Math.min(obj1.width, obj1.height) / 2;
+        float radius2 = Math.min(obj2.width, obj2.height) / 2;
+        float minDistance = (radius1 + radius2) * collisionFactor;
+        
+        // Если расстояние меньше суммы радиусов, то произошло столкновение
+        return distance < minDistance;
+    }
+
+    private boolean checkMagneticEffect(Rectangle object, Rectangle ship, float magnetRadius) {
+        // Рассчитываем центры объектов
+        float objectCenterX = object.x + object.width / 2;
+        float objectCenterY = object.y + object.height / 2;
+        float shipCenterX = ship.x + ship.width / 2;
+        float shipCenterY = ship.y + ship.height / 2;
+        
+        // Рассчитываем расстояние между центрами
+        float dx = objectCenterX - shipCenterX;
+        float dy = objectCenterY - shipCenterY;
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+        
+        // Если объект в радиусе действия магнита
+        return distance < magnetRadius;
+    }
+
+    /**
+     * Проверяет и разрешает столкновения между двумя объектами, предотвращая их наложение.
+     * Если объекты пересекаются, они отталкиваются в противоположных направлениях.
+     * Дополнительно учитывает позицию объектов относительно нижней границы экрана.
+     * 
+     * @param obj1 первый объект
+     * @param obj2 второй объект
+     * @return true, если столкновение было разрешено
+     */
+    private boolean resolveCollision(Rectangle obj1, Rectangle obj2) {
+        // Проверяем, пересекаются ли объекты
+        if (checkSmoothCollision(obj1, obj2, 1.0f)) {
+            // Вычисляем центры объектов
+            float x1 = obj1.x + obj1.width / 2;
+            float y1 = obj1.y + obj1.height / 2;
+            float x2 = obj2.x + obj2.width / 2;
+            float y2 = obj2.y + obj2.height / 2;
+            
+            // Вычисляем вектор направления от obj2 к obj1
+            float dx = x1 - x2;
+            float dy = y1 - y2;
+            
+            // Если оба объекта находятся близко к нижней границе экрана,
+            // усиливаем вертикальное отталкивание, чтобы избежать застревания
+            if (obj1.y < 50 && obj2.y < 50) {
+                dy += MathUtils.random(5, 15); // Дополнительное отталкивание вверх
+            }
+            
+            // Нормализуем вектор
+            float length = (float) Math.sqrt(dx * dx + dy * dy);
+            if (length <= 0.1f) {
+                // Если объекты находятся очень близко, сдвигаем слегка в случайном направлении
+                dx = MathUtils.random(-1f, 1f);
+                dy = MathUtils.random(0f, 2f); // Предпочтительнее вверх
+                length = (float) Math.sqrt(dx * dx + dy * dy);
+            }
+            dx /= length;
+            dy /= length;
+            
+            // Вычисляем минимальное требуемое расстояние между центрами
+            float radius1 = Math.min(obj1.width, obj1.height) / 2;
+            float radius2 = Math.min(obj2.width, obj2.height) / 2;
+            float minDistance = radius1 + radius2;
+            
+            // Корректируем позицию первого объекта
+            float pushDistance = (minDistance - length) / 2; // Половина перекрытия
+            obj1.x += dx * pushDistance;
+            obj1.y += dy * pushDistance;
+            
+            // Если объект находится близко к нижней границе, даем дополнительный импульс вверх
+            if (obj1.y < 50) {
+                obj1.y += MathUtils.random(5, 10);
+            }
+            
+            // Корректируем позицию второго объекта
+            obj2.x -= dx * pushDistance;
+            obj2.y -= dy * pushDistance;
+            
+            // Если объект находится близко к нижней границе, даем дополнительный импульс вверх
+            if (obj2.y < 50) {
+                obj2.y += MathUtils.random(5, 10);
+            }
+            
+            // Ограничиваем объекты, чтобы не выходили за экран
+            constrainToScreen(obj1);
+            constrainToScreen(obj2);
+            
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Ограничивает объект, чтобы он не выходил за пределы экрана
+     * Для объектов внизу экрана применяется специальная логика, чтобы они не застревали
+     */
+    private void constrainToScreen(Rectangle obj) {
+        if (obj.x < 0) obj.x = 0;
+        if (obj.y < 0) {
+            // Если объект в нижней части экрана, даем ему небольшой импульс вверх
+            // чтобы избежать застревания внизу
+            obj.y = 10 + MathUtils.random(5);
+        }
+        if (obj.x + obj.width > GAME_WIDTH) obj.x = GAME_WIDTH - obj.width;
+        if (obj.y + obj.height > GAME_HEIGHT) obj.y = GAME_HEIGHT - obj.height;
+    }
+
+    /**
+     * Проверяет и удаляет объекты, которые слишком долго находятся внизу экрана
+     */
+    private void checkForStuckObjects() {
+        // Удаление застрявших астероидов (если они слишком долго находятся внизу экрана)
+        for (Iterator<Rectangle> iter = asteroids.iterator(); iter.hasNext();) {
+            Rectangle asteroid = iter.next();
+            if (asteroid.y < 50 && MathUtils.randomBoolean(0.02f)) { // 2% шанс на каждое обновление
+                iter.remove();
+                // Добавляем небольшое количество очков за "потерянный" астероид
+                addScore(5);
+                continue;
+            }
+        }
+        
+        // Удаление застрявших врагов
+        for (Iterator<Rectangle> iter = enemies.iterator(); iter.hasNext();) {
+            Rectangle enemy = iter.next();
+            if (enemy.y < 50 && MathUtils.randomBoolean(0.03f)) { // 3% шанс на каждое обновление
+                iter.remove();
+                // Добавляем очки за врага, который "улетел"
+                addScore(10);
+                continue;
+            }
+        }
+        
+        // Удаление застрявшего топлива, но с меньшей вероятностью, чтобы у игрока был шанс его собрать
+        for (Iterator<Rectangle> iter = fuelCanisters.iterator(); iter.hasNext();) {
+            Rectangle fuel = iter.next();
+            if (fuel.y < 50 && MathUtils.randomBoolean(0.01f)) { // 1% шанс на каждое обновление
+                iter.remove();
+                continue;
+            }
+        }
+        
+        // Удаление застрявших сердечек, тоже с меньшей вероятностью
+        for (Iterator<Rectangle> iter = hearts.iterator(); iter.hasNext();) {
+            Rectangle heart = iter.next();
+            if (heart.y < 50 && MathUtils.randomBoolean(0.01f)) { // 1% шанс на каждое обновление
+                iter.remove();
+                continue;
+            }
+        }
+    }
+
+    /**
+     * Обрабатывает ввод пользователя
+     */
+    private void handleInput(float delta) {
+        // Обработка клавиши Escape для паузы
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
+            if (isPaused) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+            return; // Выходим из метода, чтобы не обрабатывать другие клавиши
+        }
+
+        // Проверка касания кнопки паузы (обработка до других действий)
+        if (!gameOver && Gdx.input.justTouched()) {
+            Vector3 touchPos = new Vector3();
+            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+            camera.unproject(touchPos);
+
+            // Отладочная информация о позиции касания
+            Gdx.app.debug("GameScreen", "Touch at X:" + touchPos.x + " Y:" + touchPos.y);
+            Gdx.app.debug("GameScreen", "Pause button at X:" + pauseButtonRect.x + " Y:" + pauseButtonRect.y +
+                         " Width:" + pauseButtonRect.width + " Height:" + pauseButtonRect.height);
+
+            // Проверяем, было ли касание по кнопке паузы
+            if (touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
+                touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height) {
+
+                Gdx.app.log("GameScreen", "Pause button touched");
+
+                if (isPaused) {
+                    resumeGame();
+                } else {
+                    pauseGame();
+                }
+                return; // Выходим из метода, чтобы не обрабатывать другие касания
+            }
+        }
+
+        // Проверка на стрельбу (только при битве с боссом)
+        if (bossActive && !isPaused && !gameOver) {
+            boolean shouldShoot = false;
+
+            // Проверка удержания пальца на экране (непрерывная стрельба)
+            if (Gdx.input.isTouched()) {
+                // Получаем позицию касания
+                Vector3 touchPos = new Vector3();
+                touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+                camera.unproject(touchPos);
+
+                // Проверяем, что касание не на кнопке паузы
+                if (!(touchPos.x >= pauseButtonRect.x && touchPos.x <= pauseButtonRect.x + pauseButtonRect.width &&
+                    touchPos.y >= pauseButtonRect.y && touchPos.y <= pauseButtonRect.y + pauseButtonRect.height)) {
+                    shouldShoot = true;
+                }
+            }
+
+            // Проверка нажатия пробела (непрерывная стрельба)
+            if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
+                shouldShoot = true;
+            }
+
+            // Проверка контроллера для стрельбы
+            if (controllerConnected && activeController != null) {
+                // Проверяем кнопку A (Xbox) или X (PlayStation) - обычно кнопка 0
+                if (activeController.getButton(0)) {
+                    shouldShoot = true;
+                }
+            }
+
+            // Если нужно стрелять и прошло достаточно времени с последнего выстрела
+            if (shouldShoot && TimeUtils.nanoTime() - lastPlayerShootTime > PLAYER_SHOOT_COOLDOWN) {
+                playerShoot();
+            }
+        }
+
+        // Переменные для хранения движения
+        float moveX = 0;
+        float moveY = 0;
+
+        // Обработка сенсорного ввода для движения корабля
+        if (Gdx.input.isTouched()) {
+            // Если игра на паузе, не обрабатываем движения
+            if (isPaused || gameOver) return;
+
+            Vector3 touchPos = new Vector3();
+            touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+            camera.unproject(touchPos);
+
+            // Улучшенное управление: постепенное движение к позиции касания для плавности
+            float targetX = touchPos.x - SHIP_SIZE / 2;
+            float targetY = touchPos.y - SHIP_SIZE / 2;
+            float moveStep = SHIP_SPEED * 1.5f * delta; // Увеличиваем скорость реакции
+
+            // Двигаемся плавно к точке касания по X
+            if (Math.abs(ship.x - targetX) <= moveStep) {
+                ship.x = targetX; // Если уже близко, просто устанавливаем позицию
+            } else if (ship.x < targetX) {
+                ship.x += moveStep;
+            } else {
+                ship.x -= moveStep;
+            }
+
+            // Двигаемся плавно к точке касания по Y
+            if (Math.abs(ship.y - targetY) <= moveStep) {
+                ship.y = targetY; // Если уже близко, просто устанавливаем позицию
+            } else if (ship.y < targetY) {
+                ship.y += moveStep;
+            } else {
+                ship.y -= moveStep;
+            }
+        } else {
+            // Если игра на паузе, не обрабатываем движения
+            if (isPaused || gameOver) return;
+
+            // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
+            // Определяем направление движения по осям X и Y
+            if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1;
+            if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1;
+
+            // Обработка контроллера для движения, если он подключен
+            if (controllerConnected && activeController != null) {
+                // Получаем значения левого стика
+                float axisX = activeController.getAxis(0); // Обычно горизонтальная ось левого стика
+                float axisY = -activeController.getAxis(1); // Обычно вертикальная ось левого стика (инвертируем)
+
+                // Применяем мертвую зону к стикам
+                if (Math.abs(axisX) > CONTROLLER_DEADZONE) {
+                    moveX += axisX;
+                }
+
+                if (Math.abs(axisY) > CONTROLLER_DEADZONE) {
+                    moveY += axisY;
+                }
+
+                // Проверяем D-pad (крестовину)
+                // В разных контроллерах могут быть разные индексы кнопок
+                // Пробуем наиболее распространенные варианты
+
+                // Вариант 1: кнопки 11-14 для D-pad
+                if (activeController.getButton(11)) moveX -= 1; // Влево
+                if (activeController.getButton(12)) moveX += 1; // Вправо
+                if (activeController.getButton(13)) moveY += 1; // Вверх
+                if (activeController.getButton(14)) moveY -= 1; // Вниз
+
+                // Вариант 2: альтернативные индексы для D-pad
+                if (activeController.getButton(4)) moveY += 1; // Вверх
+                if (activeController.getButton(5)) moveY -= 1; // Вниз
+                if (activeController.getButton(6)) moveX -= 1; // Влево
+                if (activeController.getButton(7)) moveX += 1; // Вправо
+            }
+
+            // Если движемся по диагонали, нормализуем скорость
+            if (moveX != 0 && moveY != 0) {
+                // Нормализация для диагонального движения (чтобы суммарная скорость не превышала SHIP_SPEED)
+                float length = (float) Math.sqrt(moveX * moveX + moveY * moveY);
+                moveX /= length;
+                moveY /= length;
+            }
+
+            // Перемещаем корабль с постоянной скоростью
+            ship.x += moveX * SHIP_SPEED * delta;
+            ship.y += moveY * SHIP_SPEED * delta;
+        }
+
+        // Ограничения положения корабля по X
+        if (ship.x < 0) ship.x = 0;
+        if (ship.x > GAME_WIDTH - SHIP_SIZE) ship.x = GAME_WIDTH - SHIP_SIZE;
+
+        // Ограничения положения корабля по Y
+        if (ship.y < 0) ship.y = 0;
+        if (ship.y > GAME_HEIGHT - SHIP_SIZE) ship.y = GAME_HEIGHT - SHIP_SIZE;
+    }
+
+    /**
+     * Игрок выполняет выстрел
+     */
+    private void playerShoot() {
+        // Проверяем, прошло ли достаточно времени с последнего выстрела
+        if (TimeUtils.nanoTime() - lastPlayerShootTime < PLAYER_SHOOT_COOLDOWN) {
+            return;
+        }
+
+        // Вычисляем позицию для снаряда (центр корабля)
+        float projectileX = ship.x + ship.width / 2 - PLAYER_PROJECTILE_SIZE / 2;
+        float projectileY = ship.y + ship.height;
+
+        // Добавляем снаряд в коллекцию
+        playerProjectiles.add(new PlayerProjectile(projectileX, projectileY));
+
+        // Запоминаем время выстрела
+        lastPlayerShootTime = TimeUtils.nanoTime();
+
+        // Звук выстрела через SoundManager
+        game.soundManager.playSound(collectSound, 0.3f, 1.0f, 0.0f);
+    }
+
+    /**
+     * Обновляет снаряды игрока
+     */
+    private void updatePlayerProjectiles(float delta) {
+        // Если босс не активен, снаряды игрока не нужны
+        if (!bossActive) {
+            playerProjectiles.clear();
+            return;
+        }
+
+        // Обрабатываем каждый снаряд
+        for (Iterator<PlayerProjectile> iter = playerProjectiles.iterator(); iter.hasNext();) {
+            PlayerProjectile projectile = iter.next();
+
+            // Обновляем позицию снаряда
+            projectile.update(delta);
+
+            // Проверяем столкновение с боссом с использованием обтекаемых хитбоксов
+            if (boss != null && checkSmoothCollision(projectile.bounds, boss, 0.9f)) {
+                // Наносим урон боссу
+                damageBoss();
+
+                // Удаляем снаряд при попадании
+                iter.remove();
+
+                // Добавляем очки за попадание
+                addScore(50);
+
+                // Воспроизводим звук попадания через SoundManager
+                game.soundManager.playSound(explosionSound, 0.3f, 1.0f, 0.0f);
+
+                continue;
+            }
+
+            // Удаляем снаряды за пределами экрана
+            if (projectile.isOutOfScreen()) {
+                iter.remove();
+            }
         }
     }
 }

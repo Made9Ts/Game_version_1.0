@@ -79,9 +79,6 @@ public class SpaceCourierGame extends Game {
 		// пока не будет установлен Firebase
 		achievementSystem = new AchievementSystem();
 		Gdx.app.log("SpaceCourierGame", "Базовая система достижений инициализирована");
-		
-		// Инициализация атласа текстур (если используется)
-		// gameAtlas = new TextureAtlas("game_textures.atlas");
 	}
 	
 	/**
