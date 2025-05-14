@@ -1,7 +1,6 @@
 package com.badlogic.drop.screens;
 
 import com.badlogic.drop.SpaceCourierGame;
-import com.badlogic.drop.SpaceCourierGame.GoogleAuthListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
@@ -23,7 +22,7 @@ import com.badlogic.gdx.graphics.Pixmap;
 /**
  * Экран главного меню игры, адаптированный для Samsung Galaxy S24 Ultra
  */
-public class MainMenuScreen implements Screen, GoogleAuthListener {
+public class MainMenuScreen implements Screen {
     // Константы для вертикальной ориентации, адаптированные для S24 Ultra
     // Используем виртуальное разрешение, которое будет масштабироваться
     private static final float GAME_WIDTH = 720; // Половина ширины S24 Ultra для улучшения производительности
@@ -35,8 +34,6 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
     private Skin skin;
     private Texture backgroundImage;
     private GlyphLayout titleLayout;
-    private TextButton googleAuthButton;
-    private boolean isSignedIn;
 
     public MainMenuScreen(final SpaceCourierGame game) {
         this.game = game;
@@ -59,12 +56,6 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
         // Устанавливаем размер текста заголовка
         titleLayout = new GlyphLayout();
         titleLayout.setText(game.fontManager.getTitleFont(), "SPACE COURIER");
-        
-        // Регистрируемся как слушатель событий аутентификации
-        game.addGoogleAuthListener(this);
-        
-        // Проверяем текущее состояние авторизации
-        isSignedIn = game.isGoogleSignedIn();
         
         // Создаем скин для UI вручную
         createSkin();
@@ -120,12 +111,8 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
         
         // Создаем кнопки (используем латиницу)
         TextButton playButton = new TextButton("PLAY", skin);
-        TextButton achievementsButton = new TextButton("ACHIEVEMENTS", skin);
+        TextButton profileButton = new TextButton("PROFILE", skin);
         TextButton optionsButton = new TextButton("OPTIONS", skin);
-        
-        // Кнопка для Google авторизации
-        googleAuthButton = new TextButton(isSignedIn ? "SIGN OUT" : "SIGN IN WITH GOOGLE", skin);
-        
         TextButton exitButton = new TextButton("EXIT", skin);
         
         // Добавляем отступ сверху для заголовка (увеличен для больших экранов)
@@ -135,12 +122,9 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
         // Настраиваем размеры кнопок и добавляем их в таблицу (увеличены для больших экранов)
         table.add(playButton).width(450).height(120).pad(20);
         table.row();
-        table.add(achievementsButton).width(450).height(120).pad(20);
+        table.add(profileButton).width(450).height(120).pad(20);
         table.row();
         table.add(optionsButton).width(450).height(120).pad(20);
-        table.row();
-        // Добавляем кнопку Google авторизации
-        table.add(googleAuthButton).width(450).height(120).pad(20);
         table.row();
         table.add(exitButton).width(450).height(120).pad(20);
         
@@ -153,10 +137,10 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
             }
         });
         
-        achievementsButton.addListener(new ClickListener() {
+        profileButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                game.setScreen(new AchievementsScreen(game, game.achievementSystem));
+                game.setScreen(new ProfileScreen(game));
                 dispose();
             }
         });
@@ -167,23 +151,6 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
                 // Переход к экрану настроек
                 game.setScreen(new OptionsScreen(game));
                 dispose();
-            }
-        });
-        
-        // Обработчик для кнопки Google авторизации
-        googleAuthButton.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (isSignedIn) {
-                    // Выходим из аккаунта
-                    game.signOutFromGoogle();
-                    isSignedIn = false;
-                    googleAuthButton.setText("SIGN IN WITH GOOGLE");
-                } else {
-                    // Начинаем процесс входа
-                    game.signInWithGoogle();
-                    // Кнопка будет обновлена после успешной авторизации
-                }
             }
         });
         
@@ -219,18 +186,6 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
             GAME_WIDTH / 2 - titleLayout.width / 2,
             GAME_HEIGHT - 150
         );
-        
-        // Если пользователь авторизован, показываем его имя
-        if (isSignedIn && game.getGoogleUserName() != null) {
-            BitmapFont font = game.fontManager.getUIFont();
-            font.setColor(Color.WHITE);
-            font.draw(
-                game.batch,
-                "Hello, " + game.getGoogleUserName(),
-                GAME_WIDTH / 2 - 150,
-                GAME_HEIGHT - 50
-            );
-        }
         
         game.batch.end();
         
@@ -269,9 +224,6 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
 
     @Override
     public void dispose() {
-        // Отписываемся от событий
-        game.removeGoogleAuthListener(this);
-        
         // Освобождаем ресурсы
         stage.dispose();
         backgroundImage.dispose();
@@ -284,22 +236,5 @@ public class MainMenuScreen implements Screen, GoogleAuthListener {
         
         // Не требуется вручную освобождать шрифты, так как их освободит FontManager
         // при закрытии приложения
-    }
-    
-    // --- Реализация интерфейса GoogleAuthListener ---
-    
-    @Override
-    public void onGoogleSignInSuccess(String userName, String email) {
-        // Обновляем UI после успешной авторизации
-        isSignedIn = true;
-        if (googleAuthButton != null) {
-            googleAuthButton.setText("SIGN OUT");
-        }
-    }
-    
-    @Override
-    public void onGoogleSignInFailure(String errorMessage) {
-        // Ничего не делаем, просто оставляем кнопку как есть
-        isSignedIn = false;
     }
 } 
