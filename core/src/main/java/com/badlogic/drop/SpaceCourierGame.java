@@ -5,6 +5,7 @@ import com.badlogic.drop.systems.AchievementSystem;
 import com.badlogic.drop.util.FontManager;
 import com.badlogic.drop.util.GoogleAuthInterface;
 import com.badlogic.drop.util.SoundManager;
+import com.badlogic.drop.firebase.FirebaseInterface;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -37,9 +38,13 @@ public class SpaceCourierGame extends Game {
 	// Интерфейс для работы с Google Auth
 	private GoogleAuthInterface googleAuthInterface;
 	
+	// Интерфейс для работы с Firebase
+	private FirebaseInterface firebaseInterface;
+	
 	// Данные пользователя Google
 	private String googleUserName;
 	private String googleUserEmail;
+	private String googleUserId;
 	private boolean isGoogleSignedIn;
 	
 	// Слушатели аутентификации
@@ -49,7 +54,7 @@ public class SpaceCourierGame extends Game {
 	 * Интерфейс для получения уведомлений о событиях аутентификации Google
 	 */
 	public interface GoogleAuthListener {
-		void onGoogleSignInSuccess(String userName, String email);
+		void onGoogleSignInSuccess(String userName, String email, String userId);
 		void onGoogleSignInFailure(String errorMessage);
 	}
 
@@ -67,12 +72,48 @@ public class SpaceCourierGame extends Game {
 		// Инициализация основных ресурсов
 		batch = new SpriteBatch();
 		fontManager = new FontManager();
-		achievementSystem = new AchievementSystem();
 		soundManager = new SoundManager();
 		authListeners = new Array<>();
 		
+		// Создаем базовую систему достижений, которая будет использоваться, 
+		// пока не будет установлен Firebase
+		achievementSystem = new AchievementSystem();
+		Gdx.app.log("SpaceCourierGame", "Базовая система достижений инициализирована");
+		
 		// Инициализация атласа текстур (если используется)
 		// gameAtlas = new TextureAtlas("game_textures.atlas");
+	}
+	
+	/**
+	 * Устанавливает интерфейс Firebase
+	 * @param firebaseInterface Реализация интерфейса Firebase
+	 */
+	public void setFirebaseInterface(FirebaseInterface firebaseInterface) {
+		this.firebaseInterface = firebaseInterface;
+		
+		// Проверяем, что Gdx.app инициализирован
+		if (Gdx.app == null) {
+			// Не можем использовать Gdx.app.error, так как Gdx.app == null
+			System.err.println("SpaceCourierGame: Gdx.app не инициализирован! Firebase будет установлен позже.");
+			return;
+		}
+		
+		// Инициализируем систему достижений с Firebase
+		if (this.firebaseInterface != null) {
+			// Если система уже была создана, освобождаем ресурсы
+			if (achievementSystem != null) {
+				achievementSystem.dispose();
+			}
+			// Создаем систему достижений с поддержкой Firebase
+			achievementSystem = new AchievementSystem(this, firebaseInterface);
+			Gdx.app.log("SpaceCourierGame", "Система достижений с Firebase инициализирована");
+		} else {
+			// Создаем стандартную систему достижений без Firebase
+			if (achievementSystem == null) {
+				achievementSystem = new AchievementSystem();
+				Gdx.app.log("SpaceCourierGame", "Система достижений без Firebase инициализирована");
+			}
+		}
 	}
 	
 	/**
@@ -86,6 +127,12 @@ public class SpaceCourierGame extends Game {
 			this.isGoogleSignedIn = true;
 			this.googleUserName = googleAuthInterface.getUserName();
 			this.googleUserEmail = googleAuthInterface.getUserEmail();
+			this.googleUserId = googleAuthInterface.getUserId();
+			
+			// Если Firebase инициализирован, привязываем достижения к пользователю
+			if (firebaseInterface != null && achievementSystem != null) {
+				achievementSystem.setUser(googleUserId);
+			}
 		}
 	}
 	
@@ -125,10 +172,37 @@ public class SpaceCourierGame extends Game {
 	 */
 	public void signOutFromGoogle() {
 		if (googleAuthInterface != null) {
-			googleAuthInterface.signOut();
-			isGoogleSignedIn = false;
+			Gdx.app.log("SpaceCourierGame", "Выход пользователя: " + 
+						(googleUserName != null ? googleUserName : "unknown") +
+						" (userId: " + (googleUserId != null ? googleUserId : "null") + ")");
+			
+			// Сохраняем предыдущий userID для логирования
+			final String oldUserId = googleUserId;
+			
+			// Убедимся, что все достижения сохранены перед выходом
+			if (achievementSystem != null && isGoogleSignedIn) {
+				Gdx.app.log("SpaceCourierGame", "Синхронизация достижений перед выходом");
+				// Принудительная синхронизация достижений перед выходом
+				achievementSystem.syncProgress();
+				
+				// Отвязываем пользователя от системы достижений и сбрасываем его достижения
+				Gdx.app.log("SpaceCourierGame", "Отвязываем пользователя от системы достижений");
+				// Устанавливаем userId как null, чтобы сбросить достижения
+				achievementSystem.setUser(null);
+			}
+			
+			// Сбрасываем данные пользователя
 			googleUserName = null;
 			googleUserEmail = null;
+			googleUserId = null;
+			isGoogleSignedIn = false;
+			
+			// Запускаем выход из аккаунта Google
+			googleAuthInterface.signOut();
+			
+			Gdx.app.log("SpaceCourierGame", "Выход пользователя " + oldUserId + " выполнен успешно");
+		} else {
+			Gdx.app.error("SpaceCourierGame", "Невозможно выполнить выход: GoogleAuthInterface не инициализирован");
 		}
 	}
 	
@@ -157,19 +231,71 @@ public class SpaceCourierGame extends Game {
 	}
 	
 	/**
+	 * Возвращает ID пользователя Google
+	 * @return ID пользователя или null
+	 */
+	public String getGoogleUserId() {
+		return googleUserId;
+	}
+	
+	/**
 	 * Вызывается при успешном входе в аккаунт Google
 	 * @param userName Имя пользователя
 	 * @param email Email пользователя
 	 */
-	public void onGoogleSignInSuccess(String userName, String email) {
+	public void onGoogleSignInSuccess(String userName, String email, String userId) {
+		Gdx.app.log("SpaceCourierGame", "Успешный вход: " + userName + " (" + email + "), userId: " + userId);
+		
+		// Обновляем данные пользователя
 		this.googleUserName = userName;
 		this.googleUserEmail = email;
+		this.googleUserId = userId;
 		this.isGoogleSignedIn = true;
 		
-		// Уведомляем всех слушателей
-		for (GoogleAuthListener listener : authListeners) {
-			listener.onGoogleSignInSuccess(userName, email);
+		// Если Firebase инициализирован, но система достижений не создана с ним,
+		// пересоздаем систему достижений
+		if (firebaseInterface != null) {
+			boolean needReinitialization = false;
+			
+			// Если система не создана или создана без Firebase
+			if (achievementSystem == null || !(achievementSystem instanceof AchievementSystem)) {
+				needReinitialization = true;
+			}
+			
+			if (needReinitialization) {
+				Gdx.app.log("SpaceCourierGame", "Пересоздаем систему достижений с Firebase");
+				if (achievementSystem != null) {
+					achievementSystem.dispose();
+				}
+				achievementSystem = new AchievementSystem(this, firebaseInterface);
+			}
+			
+			// Привязываем достижения к пользователю
+			if (achievementSystem != null) {
+				Gdx.app.log("SpaceCourierGame", "Привязываем достижения к пользователю: " + userId);
+				achievementSystem.setUser(userId);
+			} else {
+				Gdx.app.error("SpaceCourierGame", "Не удалось инициализировать систему достижений!");
+			}
+		} else {
+			Gdx.app.log("SpaceCourierGame", "Firebase не инициализирован, используем локальные достижения");
 		}
+		
+		// Уведомляем всех слушателей, но в главном потоке рендеринга
+		final String finalUserName = userName;
+		final String finalEmail = email;
+		final String finalUserId = userId;
+		
+		Gdx.app.postRunnable(new Runnable() {
+			@Override
+			public void run() {
+				for (GoogleAuthListener listener : authListeners) {
+					if (listener != null) {
+						listener.onGoogleSignInSuccess(finalUserName, finalEmail, finalUserId);
+					}
+				}
+			}
+		});
 	}
 	
 	/**
@@ -179,10 +305,19 @@ public class SpaceCourierGame extends Game {
 	public void onGoogleSignInFailure(String errorMessage) {
 		this.isGoogleSignedIn = false;
 		
-		// Уведомляем всех слушателей
-		for (GoogleAuthListener listener : authListeners) {
-			listener.onGoogleSignInFailure(errorMessage);
-		}
+		// Уведомляем всех слушателей, но в главном потоке рендеринга
+		final String finalErrorMessage = errorMessage;
+		
+		Gdx.app.postRunnable(new Runnable() {
+			@Override
+			public void run() {
+				for (GoogleAuthListener listener : authListeners) {
+					if (listener != null) {
+						listener.onGoogleSignInFailure(finalErrorMessage);
+					}
+				}
+			}
+		});
 	}
 
 	@Override

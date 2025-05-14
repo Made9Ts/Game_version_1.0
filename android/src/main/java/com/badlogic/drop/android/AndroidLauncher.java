@@ -10,10 +10,21 @@ import android.widget.Toast;
 
 import com.badlogic.drop.SpaceCourierGame;
 import com.badlogic.drop.android.GoogleAuthManager.AuthCallback;
+import com.badlogic.drop.firebase.FirebaseInterface;
 import com.badlogic.drop.util.GoogleAuthInterface;
 import com.badlogic.gdx.backends.android.AndroidApplication;
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.badlogic.gdx.utils.ObjectMap;
+import java.util.HashMap;
+import java.util.Map;
+import com.badlogic.gdx.Gdx;
 
 /** 
  * Лаунчер для Android-версии игры, оптимизированный для Samsung Galaxy S24 Ultra 
@@ -74,11 +85,25 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
         // Устанавливаем буфер глубины
         config.depth = 16;              // 16-битный буфер глубины
         
-        // Инициализируем игру с конфигурацией и передаем ей интерфейс для авторизации
+        // Инициализируем игру с конфигурацией
         game = new SpaceCourierGame();
+        
         // Устанавливаем интерфейс Google Auth
         game.setGoogleAuthInterface(this);
+        
+        // Инициализируем LibGDX
         initialize(game, config);
+        
+        // ТЕПЕРЬ инициализируем Firebase интерфейс после того, как Gdx.app доступен
+        final FirebaseInterface firebaseInterface = new com.badlogic.drop.firebase.AndroidFirebaseInterface(this);
+        
+        // Используем postRunnable для безопасной установки Firebase интерфейса
+        Gdx.app.postRunnable(new Runnable() {
+            @Override
+            public void run() {
+                game.setFirebaseInterface(firebaseInterface);
+            }
+        });
     }
     
     // --- Реализация интерфейса GoogleAuthInterface ---
@@ -116,6 +141,12 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
     }
     
     @Override
+    public String getUserId() {
+        FirebaseUser user = authManager.getCurrentUser();
+        return user != null ? user.getUid() : null;
+    }
+    
+    @Override
     public String getUserPhotoUrl() {
         FirebaseUser user = authManager.getCurrentUser();
         return user != null && user.getPhotoUrl() != null ? user.getPhotoUrl().toString() : null;
@@ -137,7 +168,7 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
             Toast.makeText(this, "Добро пожаловать, " + user.getDisplayName(), Toast.LENGTH_SHORT).show();
             // Уведомляем игру о успешном входе
             if (game != null) {
-                game.onGoogleSignInSuccess(user.getDisplayName(), user.getEmail());
+                game.onGoogleSignInSuccess(user.getDisplayName(), user.getEmail(), user.getUid());
             }
         });
     }

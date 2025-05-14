@@ -34,6 +34,12 @@ public interface GoogleAuthInterface {
     String getUserEmail();
     
     /**
+     * Получает ID пользователя Google
+     * @return ID пользователя или null, если пользователь не авторизован
+     */
+    String getUserId();
+    
+    /**
      * Получает URL фотографии пользователя
      * @return URL фотографии или null, если пользователь не авторизован или фото отсутствует
      */
