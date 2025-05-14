@@ -10,7 +10,7 @@ buildscript {
   }
   dependencies {
     classpath 'com.android.tools.build:gradle:8.9.2'
-
+    classpath 'com.google.gms:google-services:4.4.0'
   }
 }
 
@@ -25,17 +25,17 @@ allprojects {
       testOutputDir file('build/classes/java/test')
     }
   }
-  
+
   // Исключение дублирующихся файлов META-INF/INDEX.LIST
   tasks.withType(Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
   }
-  
+
   // Настройка обработки META-INF дубликатов
   tasks.withType(JavaCompile) {
     options.compilerArgs << '-Xdoclint:none'
   }
-  
+
   // Обработка файлов модулей расширения Groovy
   tasks.withType(Jar) {
     manifest {
@@ -45,7 +45,7 @@ allprojects {
         'Build-OS': "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}"
       )
     }
-    
+
     // Правильная обработка для META-INF файлов
     exclude "META-INF/groovy/org.codehaus.groovy.runtime.ExtensionModule"
   }
