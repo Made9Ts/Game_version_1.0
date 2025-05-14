@@ -179,8 +179,13 @@ public class SpaceCourierGame extends Game {
 			// Сохраняем предыдущий userID для логирования
 			final String oldUserId = googleUserId;
 			
-			// Отвязываем пользователя от системы достижений
-			if (achievementSystem != null) {
+			// Убедимся, что все достижения сохранены перед выходом
+			if (achievementSystem != null && isGoogleSignedIn) {
+				Gdx.app.log("SpaceCourierGame", "Синхронизация достижений перед выходом");
+				// Принудительная синхронизация достижений перед выходом
+				achievementSystem.syncProgress();
+				
+				// Отвязываем пользователя от системы достижений и сбрасываем его достижения
 				Gdx.app.log("SpaceCourierGame", "Отвязываем пользователя от системы достижений");
 				// Устанавливаем userId как null, чтобы сбросить достижения
 				achievementSystem.setUser(null);

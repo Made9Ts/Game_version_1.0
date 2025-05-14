@@ -162,6 +162,15 @@ public class AchievementSystem implements Disposable {
             // Сбрасываем состояние загрузки
             isLoading = false;
             
+            // Если пользователь вышел из аккаунта, полностью очищаем все достижения
+            if (userId == null && oldUserId != null) {
+                Gdx.app.log("AchievementSystem", "Выход из аккаунта: " + oldUserId + ". Очищаем все достижения.");
+                // Сбрасываем достижения и отключаем их сохранение до следующего входа
+                resetAllAchievements();
+                // Очищаем достижения, разблокированные в этой сессии
+                unlockedThisSession.clear();
+            }
+            
             Gdx.app.log("AchievementSystem", "Пользователь не авторизован или Firebase недоступен, достижения сброшены");
         }
     }
@@ -678,5 +687,34 @@ public class AchievementSystem implements Disposable {
      */
     public boolean isLoading() {
         return isLoading;
+    }
+    
+    /**
+     * Сбрасывает достижение в начальное состояние
+     * @param id идентификатор достижения для сброса
+     * @return true если достижение найдено и сброшено, false если не найдено
+     */
+    public boolean resetAchievement(String id) {
+        if (!achievements.containsKey(id)) {
+            return false;
+        }
+        
+        Achievement achievement = achievements.get(id);
+        achievement.progress = 0;
+        achievement.unlocked = false;
+        
+        // Удаляем из списка разблокированных в этой сессии, если оно там есть
+        unlockedThisSession.removeValue(id, false);
+        
+        Gdx.app.log("AchievementSystem", "Достижение сброшено: " + id);
+        return true;
+    }
+    
+    /**
+     * Явно сохраняет текущий прогресс достижений
+     * Публичный метод для принудительной синхронизации
+     */
+    public void syncProgress() {
+        saveProgress();
     }
 } 
