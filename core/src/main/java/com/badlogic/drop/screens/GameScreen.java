@@ -2,6 +2,7 @@ package com.badlogic.drop.screens;
 
 import com.badlogic.drop.SpaceCourierGame;
 import com.badlogic.drop.systems.DifficultySystem;
+import com.badlogic.drop.util.StarField;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -58,7 +59,7 @@ public class GameScreen implements Screen, ControllerListener {
     // Константы игрового процесса
     private static final int SHIP_SPEED = 500;
     private static final float MAX_FUEL = 100f;
-    private static final float FUEL_CONSUMPTION = 2.5f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
+    private static final float FUEL_CONSUMPTION = 2.4f; // Увеличено с 2.4f до 2.8f для более быстрого расхода
     private static final int MAX_LIVES = 3;
     private static final float PLAYER_PROJECTILE_SPEED = 400f; // Скорость снаряда игрока
     private static final long PLAYER_SHOOT_COOLDOWN = 500000000L; // Задержка между выстрелами игрока (0.5 сек)
@@ -201,6 +202,9 @@ public class GameScreen implements Screen, ControllerListener {
 
     // Время последнего появления бонуса
     private float lastPowerupTime = 0;
+
+    // Звездное поле
+    private StarField starField;
 
     /**
      * Класс для бонусов в игре
@@ -356,6 +360,9 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Создаем UI паузы сразу
         createPauseUI();
+
+        // Инициализация звездного поля
+        starField = new StarField(GAME_WIDTH, GAME_HEIGHT);
     }
 
     /**
@@ -754,40 +761,41 @@ public class GameScreen implements Screen, ControllerListener {
      */
     private void drawGame(float delta) {
         game.batch.begin();
-
-        // Фон
+        
+        // Рисуем фон
         game.batch.draw(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
-
+        
+        // Рисуем звездное поле поверх фона
+        starField.render(game.batch);
+        
         // Отрисовка объектов только если игра не окончена
         if (!gameOver || forceGameOverRender) {
-            // Игровые объекты
+            // Рисуем игровые объекты
             drawGameObjects();
-
-            // Интерфейс
+            
+            // Рисуем игровой интерфейс
             drawGameInterface();
-
-            // Отрисовка кнопки паузы (если игра не на паузе)
-            if (!isPaused && pauseButtonTexture != null) {
-                game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y,
-                                pauseButtonRect.width, pauseButtonRect.height);
-            }
-
-            // Если есть активная анимация нового уровня, рисуем ее
+            
+            // Отрисовка анимаций и уведомлений
             if (showLevelUpAnimation) {
                 drawLevelUpAnimation(delta);
             }
-
-            // Если есть активное уведомление о достижении, рисуем его
+            
             if (achievementNotificationActive) {
                 drawAchievementNotification(delta);
             }
-
-            // Если активно предупреждение о низком уровне топлива, отображаем его
+            
             if (lowFuelWarningActive) {
                 drawLowFuelWarning(delta);
             }
+            
+            // Отрисовка кнопки паузы (если игра не на паузе)
+            if (!isPaused && pauseButtonTexture != null) {
+                game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y,
+                             pauseButtonRect.width, pauseButtonRect.height);
+            }
         }
-
+        
         game.batch.end();
     }
 
@@ -953,28 +961,28 @@ public class GameScreen implements Screen, ControllerListener {
         // Проверяем столкновения между астероидами
         for (int i = 0; i < asteroids.size; i++) {
             Rectangle asteroid1 = asteroids.get(i);
-            
+
             // Проверяем столкновения с другими астероидами (только с астероидами с большим индексом)
             for (int j = i + 1; j < asteroids.size; j++) {
                 Rectangle asteroid2 = asteroids.get(j);
                 resolveCollision(asteroid1, asteroid2);
             }
-            
+
             // Проверяем столкновения с врагами
             for (Rectangle enemy : enemies) {
                 resolveCollision(asteroid1, enemy);
             }
-            
+
             // Проверяем столкновения с топливом
             for (Rectangle fuel : fuelCanisters) {
                 resolveCollision(asteroid1, fuel);
             }
-            
+
             // Проверяем столкновения с сердечками
             for (Rectangle heart : hearts) {
                 resolveCollision(asteroid1, heart);
             }
-            
+
             // Проверяем столкновения со снарядами босса - снаряды уничтожаются при столкновении с астероидами
             for (Iterator<BossProjectile> iter = bossProjectiles.iterator(); iter.hasNext();) {
                 BossProjectile projectile = iter.next();
@@ -986,72 +994,72 @@ public class GameScreen implements Screen, ControllerListener {
                 }
             }
         }
-        
+
         // Проверяем столкновения между врагами
         for (int i = 0; i < enemies.size; i++) {
             Rectangle enemy1 = enemies.get(i);
-            
+
             // Проверяем столкновения с другими врагами (только с врагами с большим индексом)
             for (int j = i + 1; j < enemies.size; j++) {
                 Rectangle enemy2 = enemies.get(j);
                 resolveCollision(enemy1, enemy2);
             }
-            
+
             // Проверяем столкновения с топливом
             for (Rectangle fuel : fuelCanisters) {
                 resolveCollision(enemy1, fuel);
             }
-            
+
             // Проверяем столкновения с сердечками
             for (Rectangle heart : hearts) {
                 resolveCollision(enemy1, heart);
             }
-            
+
             // Проверяем столкновения со снарядами босса - снаряды просто проходят через врагов
         }
-        
+
         // Проверяем столкновения между топливом
         for (int i = 0; i < fuelCanisters.size; i++) {
             Rectangle fuel1 = fuelCanisters.get(i);
-            
+
             // Проверяем столкновения с другим топливом (только с топливом с большим индексом)
             for (int j = i + 1; j < fuelCanisters.size; j++) {
                 Rectangle fuel2 = fuelCanisters.get(j);
                 resolveCollision(fuel1, fuel2);
             }
-            
+
             // Проверяем столкновения с сердечками
             for (Rectangle heart : hearts) {
                 resolveCollision(fuel1, heart);
             }
         }
-        
+
         // Проверяем столкновения между сердечками
         for (int i = 0; i < hearts.size; i++) {
             Rectangle heart1 = hearts.get(i);
-            
+
             // Проверяем столкновения с другими сердечками (только с сердечками с большим индексом)
             for (int j = i + 1; j < hearts.size; j++) {
                 Rectangle heart2 = hearts.get(j);
                 resolveCollision(heart1, heart2);
             }
         }
-        
+
         // Проверяем столкновения между снарядами игрока и снарядами босса
         for (Iterator<PlayerProjectile> playerIter = playerProjectiles.iterator(); playerIter.hasNext();) {
             PlayerProjectile playerProjectile = playerIter.next();
-            
+
             for (Iterator<BossProjectile> bossIter = bossProjectiles.iterator(); bossIter.hasNext();) {
                 BossProjectile bossProjectile = bossIter.next();
-                
+
                 if (checkSmoothCollision(playerProjectile.bounds, bossProjectile.bounds, 0.9f)) {
                     // При столкновении уничтожаем оба снаряда
                     playerIter.remove();
                     bossIter.remove();
-                    
+
                     // Звук столкновения
                     game.soundManager.playSound(explosionSound, 0.2f, 1.3f, 0.0f);
-                    
+
                     // Выходим из внутреннего цикла, так как снаряд игрока уже уничтожен
                     break;
                 }
@@ -1185,7 +1193,7 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Затем проверяем и разрешаем все возможные столкновения между объектами
         resolveAllCollisions();
-        
+
         // Проверяем и удаляем застрявшие объекты
         checkForStuckObjects();
 
@@ -1219,18 +1227,21 @@ public class GameScreen implements Screen, ControllerListener {
                 lastPowerupTime = POWERUP_SPAWN_INTERVAL - 5f;
             }
         }
+
+        // Обновляем звездное поле
+        starField.update(delta);
     }
 
     private void updateAsteroids(float delta, float difficulty) {
         Iterator<Rectangle> iter = asteroids.iterator();
         while (iter.hasNext()) {
             Rectangle asteroid = iter.next();
-            
+
             // Если астероид находится в нижней части экрана, ускоряем его падение
             // и добавляем небольшие случайные импульсы, чтобы избежать застревания
             if (asteroid.y < 50) {
                 asteroid.y -= (100 + difficulty * 30) * delta; // Увеличенная скорость
-                
+
                 // Добавляем небольшое случайное движение по X, чтобы избежать скопления
                 asteroid.x += MathUtils.random(-30, 30) * delta;
             } else {
@@ -1260,11 +1271,11 @@ public class GameScreen implements Screen, ControllerListener {
         Iterator<Rectangle> iter = enemies.iterator();
         while (iter.hasNext()) {
             Rectangle enemy = iter.next();
-            
+
             // Если враг находится в нижней части экрана, ускоряем его и добавляем случайное движение
             if (enemy.y < 50) {
                 enemy.y -= (100 + difficulty * 35) * delta; // Увеличенная скорость
-                
+
                 // Более сильное случайное движение по X
                 enemy.x += MathUtils.random(-40, 40) * delta;
             } else {
@@ -1307,11 +1318,11 @@ public class GameScreen implements Screen, ControllerListener {
         Iterator<Rectangle> iter = fuelCanisters.iterator();
         while (iter.hasNext()) {
             Rectangle fuelCanister = iter.next();
-            
+
             // Если топливо находится в нижней части экрана, ускоряем его и добавляем случайное движение
             if (fuelCanister.y < 50) {
                 fuelCanister.y -= 120 * delta; // Увеличенная скорость
-                
+
                 // Добавляем случайное движение по X для избежания скопления
                 fuelCanister.x += MathUtils.random(-20, 20) * delta;
             } else {
@@ -1325,21 +1336,21 @@ public class GameScreen implements Screen, ControllerListener {
             }
 
             // Проверяем сбор топлива игроком с использованием более обтекаемых хитбоксов
-            if (checkSmoothCollision(fuelCanister, ship, 0.9f) || 
+            if (checkSmoothCollision(fuelCanister, ship, 0.9f) ||
                 (magnetActive && checkMagneticEffect(fuelCanister, ship, 150f))) {
                 // Удаляем канистру из итератора
                 iter.remove();
                 // Обрабатываем сбор топлива (без повторного удаления)
                 // Воспроизводим звук сбора через SoundManager
                 game.soundManager.playSound(collectSound);
-                
+
                 // Увеличиваем топливо
                 fuel = Math.min(MAX_FUEL, fuel + 25);
                 fuelCollected++;
-                
+
                 // Добавляем очки за сбор топлива
                 addScore(20);
-                
+
                 // Отмечаем успех для системы сложности
                 difficultySystem.registerSuccess();
             }
@@ -1353,11 +1364,11 @@ public class GameScreen implements Screen, ControllerListener {
         Iterator<Rectangle> iter = hearts.iterator();
         while (iter.hasNext()) {
             Rectangle heart = iter.next();
-            
+
             // Если сердечко находится в нижней части экрана, ускоряем его и добавляем случайное движение
             if (heart.y < 50) {
                 heart.y -= 120 * delta; // Увеличенная скорость
-                
+
                 // Добавляем случайное движение по X для избежания скопления
                 heart.x += MathUtils.random(-20, 20) * delta;
             } else {
@@ -1371,11 +1382,11 @@ public class GameScreen implements Screen, ControllerListener {
             }
 
             // Проверяем сбор сердца игроком с использованием более обтекаемых хитбоксов
-            if (checkSmoothCollision(heart, ship, 0.9f) || 
+            if (checkSmoothCollision(heart, ship, 0.9f) ||
                 (magnetActive && checkMagneticEffect(heart, ship, 150f))) {
                 // Удаляем сердце из итератора
                 iter.remove();
-                
+
                 // Обрабатываем сбор сердца
                 if (lives < MAX_LIVES) {
                     lives++;
@@ -1402,18 +1413,18 @@ public class GameScreen implements Screen, ControllerListener {
         if (lives <= 0) {
             // Игра окончена
             gameOver = true;
-            
+
             // Обновляем текст с финальным счетом
             if (gameOverStage != null && scoreLabel != null) {
                 scoreLabel.setText("SCORE: " + score);
             }
-            
+
             // Останавливаем музыку
             game.soundManager.stopMusic();
-            
+
             // Создаем экран конца игры если необходимо
             forceGameOverRender = true;
-            
+
             // Переключаем ввод на игровой экран
             Gdx.input.setInputProcessor(gameOverStage);
         }
@@ -1451,16 +1462,16 @@ public class GameScreen implements Screen, ControllerListener {
         isPaused = false;
         // Устанавливаем null для ввода (как в методе show)
         Gdx.input.setInputProcessor(null);
-        
+
         // Возобновляем музыку через SoundManager
         game.soundManager.resumeMusic();
-        
+
         // Освобождаем ресурсы паузы
         if (pauseStage != null) {
             pauseStage.dispose();
             pauseStage = null;
         }
-        
+
         if (pauseSkin != null) {
             pauseSkin.dispose();
             pauseSkin = null;
@@ -1499,6 +1510,9 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Удаляем слушателя контроллеров
         Controllers.removeListener(this);
+
+        // Освобождаем ресурсы звездного поля
+        starField.dispose();
     }
 
     /**
@@ -1825,7 +1839,7 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Добавляем очки за сбор топлива - используем метод addScore
         addScore(20);
-        
+
         // Отмечаем успех для системы сложности
         difficultySystem.registerSuccess();
     }
@@ -2704,7 +2718,7 @@ public class GameScreen implements Screen, ControllerListener {
     /**
      * Проверяет столкновение между двумя объектами с использованием более обтекаемых хитбоксов.
      * Вместо прямоугольников используется расстояние между центрами объектов и радиусы.
-     * 
+     *
      * @param obj1 первый объект
      * @param obj2 второй объект
      * @param collisionFactor множитель для настройки "обтекаемости" хитбоксов (< 1.0f для меньшего хитбокса)
@@ -2716,18 +2730,18 @@ public class GameScreen implements Screen, ControllerListener {
         float centerY1 = obj1.y + obj1.height / 2;
         float centerX2 = obj2.x + obj2.width / 2;
         float centerY2 = obj2.y + obj2.height / 2;
-        
+
         // Рассчитываем расстояние между центрами
         float dx = centerX1 - centerX2;
         float dy = centerY1 - centerY2;
         float distance = (float) Math.sqrt(dx * dx + dy * dy);
-        
+
         // Рассчитываем сумму радиусов (с учетом множителя для обтекаемости)
         // Используем меньшую из сторон объекта для более точного хитбокса
         float radius1 = Math.min(obj1.width, obj1.height) / 2;
         float radius2 = Math.min(obj2.width, obj2.height) / 2;
         float minDistance = (radius1 + radius2) * collisionFactor;
-        
+
         // Если расстояние меньше суммы радиусов, то произошло столкновение
         return distance < minDistance;
     }
@@ -2738,12 +2752,12 @@ public class GameScreen implements Screen, ControllerListener {
         float objectCenterY = object.y + object.height / 2;
         float shipCenterX = ship.x + ship.width / 2;
         float shipCenterY = ship.y + ship.height / 2;
-        
+
         // Рассчитываем расстояние между центрами
         float dx = objectCenterX - shipCenterX;
         float dy = objectCenterY - shipCenterY;
         float distance = (float) Math.sqrt(dx * dx + dy * dy);
-        
+
         // Если объект в радиусе действия магнита
         return distance < magnetRadius;
     }
@@ -2752,7 +2766,7 @@ public class GameScreen implements Screen, ControllerListener {
      * Проверяет и разрешает столкновения между двумя объектами, предотвращая их наложение.
      * Если объекты пересекаются, они отталкиваются в противоположных направлениях.
      * Дополнительно учитывает позицию объектов относительно нижней границы экрана.
-     * 
+     *
      * @param obj1 первый объект
      * @param obj2 второй объект
      * @return true, если столкновение было разрешено
@@ -2765,17 +2779,17 @@ public class GameScreen implements Screen, ControllerListener {
             float y1 = obj1.y + obj1.height / 2;
             float x2 = obj2.x + obj2.width / 2;
             float y2 = obj2.y + obj2.height / 2;
-            
+
             // Вычисляем вектор направления от obj2 к obj1
             float dx = x1 - x2;
             float dy = y1 - y2;
-            
+
             // Если оба объекта находятся близко к нижней границе экрана,
             // усиливаем вертикальное отталкивание, чтобы избежать застревания
             if (obj1.y < 50 && obj2.y < 50) {
                 dy += MathUtils.random(5, 15); // Дополнительное отталкивание вверх
             }
-            
+
             // Нормализуем вектор
             float length = (float) Math.sqrt(dx * dx + dy * dy);
             if (length <= 0.1f) {
@@ -2786,38 +2800,38 @@ public class GameScreen implements Screen, ControllerListener {
             }
             dx /= length;
             dy /= length;
-            
+
             // Вычисляем минимальное требуемое расстояние между центрами
             float radius1 = Math.min(obj1.width, obj1.height) / 2;
             float radius2 = Math.min(obj2.width, obj2.height) / 2;
             float minDistance = radius1 + radius2;
-            
+
             // Корректируем позицию первого объекта
             float pushDistance = (minDistance - length) / 2; // Половина перекрытия
             obj1.x += dx * pushDistance;
             obj1.y += dy * pushDistance;
-            
+
             // Если объект находится близко к нижней границе, даем дополнительный импульс вверх
             if (obj1.y < 50) {
                 obj1.y += MathUtils.random(5, 10);
             }
-            
+
             // Корректируем позицию второго объекта
             obj2.x -= dx * pushDistance;
             obj2.y -= dy * pushDistance;
-            
+
             // Если объект находится близко к нижней границе, даем дополнительный импульс вверх
             if (obj2.y < 50) {
                 obj2.y += MathUtils.random(5, 10);
             }
-            
+
             // Ограничиваем объекты, чтобы не выходили за экран
             constrainToScreen(obj1);
             constrainToScreen(obj2);
-            
+
             return true;
         }
-        
+
         return false;
     }
 
@@ -2850,7 +2864,7 @@ public class GameScreen implements Screen, ControllerListener {
                 continue;
             }
         }
-        
+
         // Удаление застрявших врагов
         for (Iterator<Rectangle> iter = enemies.iterator(); iter.hasNext();) {
             Rectangle enemy = iter.next();
@@ -2861,7 +2875,7 @@ public class GameScreen implements Screen, ControllerListener {
                 continue;
             }
         }
-        
+
         // Удаление застрявшего топлива, но с меньшей вероятностью, чтобы у игрока был шанс его собрать
         for (Iterator<Rectangle> iter = fuelCanisters.iterator(); iter.hasNext();) {
             Rectangle fuel = iter.next();
@@ -2870,7 +2884,7 @@ public class GameScreen implements Screen, ControllerListener {
                 continue;
             }
         }
-        
+
         // Удаление застрявших сердечек, тоже с меньшей вероятностью
         for (Iterator<Rectangle> iter = hearts.iterator(); iter.hasNext();) {
             Rectangle heart = iter.next();

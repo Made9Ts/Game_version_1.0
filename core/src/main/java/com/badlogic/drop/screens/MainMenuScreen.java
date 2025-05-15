@@ -1,6 +1,7 @@
 package com.badlogic.drop.screens;
 
 import com.badlogic.drop.SpaceCourierGame;
+import com.badlogic.drop.util.StarField;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
@@ -34,6 +35,7 @@ public class MainMenuScreen implements Screen {
     private Skin skin;
     private Texture backgroundImage;
     private GlyphLayout titleLayout;
+    private StarField starField;
 
     public MainMenuScreen(final SpaceCourierGame game) {
         this.game = game;
@@ -59,6 +61,9 @@ public class MainMenuScreen implements Screen {
         
         // Создаем скин для UI вручную
         createSkin();
+        
+        // Создаем звездное поле
+        starField = new StarField(GAME_WIDTH, GAME_HEIGHT);
         
         createUI();
     }
@@ -179,6 +184,10 @@ public class MainMenuScreen implements Screen {
         // Растягиваем фон на весь экран в вертикальной ориентации
         game.batch.draw(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
         
+        // Отрисовываем и обновляем звездное поле
+        starField.update(delta);
+        starField.render(game.batch);
+        
         // Рисуем заголовок
         game.fontManager.getTitleFont().draw(
             game.batch,
@@ -236,5 +245,9 @@ public class MainMenuScreen implements Screen {
         
         // Не требуется вручную освобождать шрифты, так как их освободит FontManager
         // при закрытии приложения
+        
+        if (starField != null) {
+            starField.dispose();
+        }
     }
 } 
