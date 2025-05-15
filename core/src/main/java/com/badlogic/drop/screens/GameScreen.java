@@ -1,40 +1,45 @@
 package com.badlogic.drop.screens;
 
 import com.badlogic.drop.SpaceCourierGame;
+import com.badlogic.drop.systems.AchievementSystem;
 import com.badlogic.drop.systems.DifficultySystem;
 import com.badlogic.drop.util.StarField;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.controllers.Controller;
+import com.badlogic.gdx.controllers.Controllers;
+import com.badlogic.gdx.controllers.ControllerListener;
+import com.badlogic.gdx.controllers.ControllerMapping;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.CheckBox;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import java.util.Iterator;
-import com.badlogic.drop.systems.AchievementSystem;
-import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.controllers.Controllers;
-import com.badlogic.gdx.controllers.Controller;
-import com.badlogic.gdx.controllers.ControllerListener;
-import com.badlogic.gdx.controllers.ControllerMapping;
 
 /**
  * Основной экран игрового процесса, адаптированный для Samsung Galaxy S24 Ultra.
@@ -167,6 +172,14 @@ public class GameScreen implements Screen, ControllerListener {
     private TextButton pauseMenuButton;
     private boolean isPaused;
     private Rectangle pauseButtonRect;
+    
+    // Элементы управления звуком в меню паузы
+    private CheckBox pauseMusicCheckbox;
+    private CheckBox pauseSfxCheckbox;
+    private Slider pauseMusicVolumeSlider;
+    private Slider pauseSfxVolumeSlider;
+    private Label pauseMusicVolumeLabel;
+    private Label pauseSfxVolumeLabel;
 
     // Внутренние флаги отрисовки
     private boolean forceGameOverRender = false;
@@ -2012,6 +2025,9 @@ public class GameScreen implements Screen, ControllerListener {
         buttonStyle.over = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
 
         pauseSkin.add("default", buttonStyle);
+        
+        // Создаем стили для элементов управления звуком
+        createSoundControlStyles();
 
         // Стиль для заголовка
         TextButtonStyle titleStyle = new TextButtonStyle();
@@ -2042,13 +2058,44 @@ public class GameScreen implements Screen, ControllerListener {
 
         pauseMenuButton = new TextButton("ГЛАВНОЕ МЕНЮ", buttonStyle);
         pauseMenuButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
+        
+        // Создаем элементы управления звуком
+        createSoundControlElements();
 
         // Добавляем заголовок
-        pauseTable.add(pauseTitle).padBottom(60).row();
+        pauseTable.add(pauseTitle).padBottom(20).row();  // Уменьшаю отступ с 40 до 20
+        
+        // Добавляем кнопку "ПРОДОЛЖИТЬ" сразу после заголовка
+        pauseTable.add(continueButton).width(450).height(100).padTop(0).padBottom(30).row();  // Убираю padTop и увеличиваю padBottom
+        
+        // Секция управления музыкой
+        Table musicSection = new Table();
+        musicSection.add(pauseMusicCheckbox).left().padBottom(10);
+        musicSection.row();
+        
+        Table musicSliderSection = new Table();
+        musicSliderSection.add(new Label("Громкость:", pauseSkin)).padRight(10);
+        musicSliderSection.add(pauseMusicVolumeSlider).width(200);
+        musicSliderSection.add(pauseMusicVolumeLabel).width(40).padLeft(10);
+        
+        musicSection.add(musicSliderSection).padLeft(20);
+        pauseTable.add(musicSection).width(400).padBottom(20).row();
+        
+        // Секция управления звуковыми эффектами
+        Table sfxSection = new Table();
+        sfxSection.add(pauseSfxCheckbox).left().padBottom(10);
+        sfxSection.row();
+        
+        Table sfxSliderSection = new Table();
+        sfxSliderSection.add(new Label("Громкость:", pauseSkin)).padRight(10);
+        sfxSliderSection.add(pauseSfxVolumeSlider).width(200);
+        sfxSliderSection.add(pauseSfxVolumeLabel).width(40).padLeft(10);
+        
+        sfxSection.add(sfxSliderSection).padLeft(20);
+        pauseTable.add(sfxSection).width(400).padBottom(30).row();
 
-        // Настраиваем размеры кнопок и добавляем их в таблицу
-        pauseTable.add(continueButton).width(450).height(120).pad(20).row();
-        pauseTable.add(pauseMenuButton).width(450).height(120).pad(20).row();
+        // Добавляем кнопку "ГЛАВНОЕ МЕНЮ" в конце
+        pauseTable.add(pauseMenuButton).width(450).height(100).pad(10).row();
 
         // Добавляем обработчики событий на кнопки
         continueButton.addListener(new ClickListener() {
@@ -2091,6 +2138,122 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Добавляем таблицу на сцену
         pauseStage.addActor(pauseTable);
+    }
+    
+    /**
+     * Создает стили для элементов управления звуком в меню паузы
+     */
+    private void createSoundControlStyles() {
+        // Стиль для меток (Label)
+        Label.LabelStyle labelStyle = new Label.LabelStyle();
+        labelStyle.font = pauseSkin.getFont("game-font");
+        labelStyle.fontColor = pauseSkin.getColor("white");
+        pauseSkin.add("default", labelStyle);
+        
+        // Стиль для чекбоксов
+        CheckBox.CheckBoxStyle checkBoxStyle = new CheckBox.CheckBoxStyle();
+        checkBoxStyle.checkboxOn = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.6f, 0.9f, 1));
+        checkBoxStyle.checkboxOff = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.3f, 0.5f, 1));
+        checkBoxStyle.font = pauseSkin.getFont("game-font");
+        checkBoxStyle.fontColor = pauseSkin.getColor("white");
+        checkBoxStyle.checkboxOn.setMinWidth(30);
+        checkBoxStyle.checkboxOn.setMinHeight(30);
+        checkBoxStyle.checkboxOff.setMinWidth(30);
+        checkBoxStyle.checkboxOff.setMinHeight(30);
+        pauseSkin.add("default", checkBoxStyle);
+        
+        // Стиль для слайдеров
+        Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
+        sliderStyle.background = pauseSkin.newDrawable("white-pixel", new Color(0.2f, 0.2f, 0.3f, 1));
+        sliderStyle.knob = pauseSkin.newDrawable("white-pixel", new Color(0.5f, 0.5f, 0.9f, 1));
+        sliderStyle.background.setMinHeight(15);
+        sliderStyle.knob.setMinWidth(20);
+        sliderStyle.knob.setMinHeight(30);
+        pauseSkin.add("default-horizontal", sliderStyle);
+    }
+    
+    /**
+     * Создает элементы управления звуком для меню паузы
+     */
+    private void createSoundControlElements() {
+        // Создаем чекбоксы для настроек звука
+        pauseMusicCheckbox = new CheckBox(" МУЗЫКА", pauseSkin);
+        pauseSfxCheckbox = new CheckBox(" SFX-ЗВУКИ", pauseSkin);
+        
+        // Устанавливаем начальные значения чекбоксов
+        pauseMusicCheckbox.setChecked(game.soundManager.isMusicEnabled());
+        pauseSfxCheckbox.setChecked(game.soundManager.isSfxEnabled());
+        
+        // Создаем ползунки громкости
+        pauseMusicVolumeSlider = new Slider(0, 100, 1, false, pauseSkin, "default-horizontal");
+        pauseSfxVolumeSlider = new Slider(0, 100, 1, false, pauseSkin, "default-horizontal");
+        
+        // Устанавливаем начальные значения ползунков
+        pauseMusicVolumeSlider.setValue(game.soundManager.getMusicVolume() * 100);
+        pauseSfxVolumeSlider.setValue(game.soundManager.getSfxVolume() * 100);
+        
+        // Создаем метки для отображения значений громкости
+        pauseMusicVolumeLabel = new Label(String.valueOf((int)pauseMusicVolumeSlider.getValue()), pauseSkin);
+        pauseSfxVolumeLabel = new Label(String.valueOf((int)pauseSfxVolumeSlider.getValue()), pauseSkin);
+        
+        // Добавляем обработчики событий на чекбоксы
+        pauseMusicCheckbox.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                boolean enabled = pauseMusicCheckbox.isChecked();
+                game.soundManager.setMusicEnabled(enabled);
+                pauseMusicVolumeSlider.setDisabled(!enabled);
+            }
+        });
+        
+        pauseSfxCheckbox.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                boolean enabled = pauseSfxCheckbox.isChecked();
+                game.soundManager.setSfxEnabled(enabled);
+                pauseSfxVolumeSlider.setDisabled(!enabled);
+            }
+        });
+        
+        // Добавляем обработчики событий на ползунки
+        pauseMusicVolumeSlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                float value = pauseMusicVolumeSlider.getValue() / 100f;
+                game.soundManager.setMusicVolume(value);
+                pauseMusicVolumeLabel.setText(String.valueOf((int)pauseMusicVolumeSlider.getValue()));
+                
+                // Обновляем музыку для немедленного применения эффекта
+                if (game.soundManager.isMusicEnabled()) {
+                    game.soundManager.resumeMusic();
+                }
+            }
+        });
+        
+        pauseSfxVolumeSlider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                float value = pauseSfxVolumeSlider.getValue() / 100f;
+                game.soundManager.setSfxVolume(value);
+                pauseSfxVolumeLabel.setText(String.valueOf((int)pauseSfxVolumeSlider.getValue()));
+                
+                // Проиграем тестовый звук для демонстрации уровня громкости
+                if (game.soundManager.isSfxEnabled() && pauseSfxVolumeSlider.isDragging()) {
+                    // Получаем звук из GameScreen
+                    try {
+                        Sound testSound = Gdx.audio.newSound(Gdx.files.internal("collect.wav"));
+                        game.soundManager.playSound(testSound, 1.0f, 1.0f, 0.0f);
+                        testSound.dispose(); // Освобождаем ресурс после использования
+                    } catch (Exception e) {
+                        Gdx.app.log("GameScreen", "Не удалось воспроизвести тестовый звук");
+                    }
+                }
+            }
+        });
+        
+        // Устанавливаем начальное состояние ползунков в зависимости от чекбоксов
+        pauseMusicVolumeSlider.setDisabled(!pauseMusicCheckbox.isChecked());
+        pauseSfxVolumeSlider.setDisabled(!pauseSfxCheckbox.isChecked());
     }
 
     /**
@@ -2900,7 +3063,7 @@ public class GameScreen implements Screen, ControllerListener {
      */
     private void handleInput(float delta) {
         // Обработка клавиши Escape для паузы
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) && !gameOver) {
+        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE) && !gameOver) {
             if (isPaused) {
                 resumeGame();
             } else {
@@ -2954,7 +3117,7 @@ public class GameScreen implements Screen, ControllerListener {
             }
 
             // Проверка нажатия пробела (непрерывная стрельба)
-            if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
+            if (Gdx.input.isKeyPressed(Keys.SPACE)) {
                 shouldShoot = true;
             }
 
@@ -3013,10 +3176,10 @@ public class GameScreen implements Screen, ControllerListener {
 
             // Обработка клавиатуры - движение со скоростью, адаптированной для диагонального движения
             // Определяем направление движения по осям X и Y
-            if (Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1;
-            if (Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1;
+            if (Gdx.input.isKeyPressed(Keys.LEFT)) moveX -= 1;
+            if (Gdx.input.isKeyPressed(Keys.RIGHT)) moveX += 1;
+            if (Gdx.input.isKeyPressed(Keys.UP)) moveY += 1;
+            if (Gdx.input.isKeyPressed(Keys.DOWN)) moveY -= 1;
 
             // Обработка контроллера для движения, если он подключен
             if (controllerConnected && activeController != null) {
