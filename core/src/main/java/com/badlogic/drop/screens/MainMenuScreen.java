@@ -34,8 +34,12 @@ public class MainMenuScreen implements Screen {
     private Stage stage;
     private Skin skin;
     private Texture backgroundImage;
+    private Texture shipImage;
     private GlyphLayout titleLayout;
     private StarField starField;
+    
+    // Переменная для отслеживания времени (для эффекта парения)
+    private float stateTime = 0;
 
     public MainMenuScreen(final SpaceCourierGame game) {
         this.game = game;
@@ -51,13 +55,35 @@ public class MainMenuScreen implements Screen {
         backgroundImage = new Texture("background.png");
         backgroundImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         
+        // Загружаем изображение корабля
+        shipImage = new Texture("ship.png");
+        shipImage.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        
         // Создаем и настраиваем сцену с вертикальной ориентацией
         stage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
         Gdx.input.setInputProcessor(stage);
         
         // Устанавливаем размер текста заголовка
         titleLayout = new GlyphLayout();
-        titleLayout.setText(game.fontManager.getTitleFont(), "SPACE COURIER");
+        // Используем две отдельные строки для заголовка с уменьшенным размером
+        BitmapFont titleFont = game.fontManager.getTitleFont();
+        titleFont.getData().setScale(0.7f);
+        
+        // Разбиваем текст на строки для заголовка
+        String line1 = "КОСМИЧЕСКИЙ";
+        String line2 = "ПУТЕШЕСТВЕННИК";
+        
+        // Вычисляем общую высоту заголовка
+        GlyphLayout layout1 = new GlyphLayout(titleFont, line1);
+        GlyphLayout layout2 = new GlyphLayout(titleFont, line2);
+        float totalHeight = layout1.height + 20 + layout2.height; // 20 - расстояние между строками
+        float maxWidth = Math.max(layout1.width, layout2.width);
+        
+        // Обновляем titleLayout с максимальной шириной и общей высотой
+        titleLayout.width = maxWidth;
+        titleLayout.height = totalHeight;
+        
+        titleFont.getData().setScale(1.0f);
         
         // Создаем скин для UI вручную
         createSkin();
@@ -115,13 +141,13 @@ public class MainMenuScreen implements Screen {
         table.center();
         
         // Создаем кнопки (используем латиницу)
-        TextButton playButton = new TextButton("PLAY", skin);
-        TextButton profileButton = new TextButton("PROFILE", skin);
-        TextButton optionsButton = new TextButton("OPTIONS", skin);
-        TextButton exitButton = new TextButton("EXIT", skin);
+        TextButton playButton = new TextButton("Играть", skin);
+        TextButton profileButton = new TextButton("Профиль", skin);
+        TextButton optionsButton = new TextButton("Настройки", skin);
+        TextButton exitButton = new TextButton("Выход", skin);
         
         // Добавляем отступ сверху для заголовка (увеличен для больших экранов)
-        table.add().height(400);
+        table.add().height(120);
         table.row();
         
         // Настраиваем размеры кнопок и добавляем их в таблицу (увеличены для больших экранов)
@@ -172,6 +198,9 @@ public class MainMenuScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        // Обновляем время
+        stateTime += delta;
+        
         // Очищаем экран с более глубоким цветом для улучшения визуального эффекта
         ScreenUtils.clear(0.05f, 0.05f, 0.2f, 1);
         
@@ -189,11 +218,64 @@ public class MainMenuScreen implements Screen {
         starField.render(game.batch);
         
         // Рисуем заголовок
-        game.fontManager.getTitleFont().draw(
+        BitmapFont titleFont = game.fontManager.getTitleFont();
+        // Временно уменьшаем размер шрифта для заголовка
+        titleFont.getData().setScale(0.7f);
+        
+        // Разбиваем текст на две строки
+        String line1 = "КОСМИЧЕСКИЙ";
+        String line2 = "ПУТЕШЕСТВЕННИК";
+        
+        // Измеряем ширину каждой строки
+        GlyphLayout layout1 = new GlyphLayout(titleFont, line1);
+        GlyphLayout layout2 = new GlyphLayout(titleFont, line2);
+        
+        // Отрисовываем каждую строку центрированно
+        titleFont.draw(
             game.batch,
-            "SPACE COURIER",
-            GAME_WIDTH / 2 - titleLayout.width / 2,
-            GAME_HEIGHT - 150
+            line1,
+            GAME_WIDTH / 2 - layout1.width / 2,
+            GAME_HEIGHT - 120 // Поднимаем заголовок выше
+        );
+        
+        titleFont.draw(
+            game.batch,
+            line2,
+            GAME_WIDTH / 2 - layout2.width / 2,
+            GAME_HEIGHT - 120 - layout1.height - 20 // Расстояние между строками
+        );
+        
+        // Возвращаем исходный размер шрифта
+        titleFont.getData().setScale(1.0f);
+        
+        // Отрисовываем корабль между заголовком и кнопками
+        float shipWidth = 160; // Ширина корабля на экране
+        float shipHeight = 160; // Высота корабля на экране
+        float shipX = GAME_WIDTH / 2 - shipWidth / 2; // Центрируем корабль по горизонтали
+        float shipY = GAME_HEIGHT - 450; // Позиция корабля по вертикали под заголовком (опущен ниже)
+        
+        // Добавляем небольшой эффект парения для корабля
+        float hoverOffset = (float) Math.sin(stateTime * 3) * 10;
+        // Добавляем легкий эффект вращения
+        float rotation = (float) Math.sin(stateTime * 2) * 5; // Вращение на ±5 градусов
+        // Добавляем эффект пульсации
+        float scale = 1.0f + (float) Math.sin(stateTime * 1.5f) * 0.05f; // Пульсация размера ±5%
+        
+        // Рисуем корабль
+        game.batch.draw(
+            shipImage, 
+            shipX, 
+            shipY + hoverOffset, 
+            shipWidth / 2, // Центр вращения по X
+            shipHeight / 2, // Центр вращения по Y
+            shipWidth, 
+            shipHeight, 
+            scale, scale, // Масштаб с пульсацией
+            rotation, // Угол вращения
+            0, 0, // Исходная позиция в текстуре
+            shipImage.getWidth(), 
+            shipImage.getHeight(), 
+            false, false // Отражение
         );
         
         game.batch.end();
@@ -236,6 +318,7 @@ public class MainMenuScreen implements Screen {
         // Освобождаем ресурсы
         stage.dispose();
         backgroundImage.dispose();
+        shipImage.dispose();
         
         if (skin != null) {
             // Перед освобождением скина, удаляем из него шрифты, чтобы они не были удалены
