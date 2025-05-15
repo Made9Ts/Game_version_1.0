@@ -228,6 +228,7 @@ public class GameScreen implements Screen, ControllerListener {
         float activeDuration;
         float activeTime;
         boolean active;
+        float blinkAlpha; // Новое поле для хранения текущей прозрачности мерцания
 
         /**
          * Создает новый бонус указанного типа в заданной позиции
@@ -238,6 +239,7 @@ public class GameScreen implements Screen, ControllerListener {
             this.activeDuration = 10f;
             this.activeTime = 0;
             this.active = false;
+            this.blinkAlpha = 1.0f; // Начальная прозрачность без мерцания
         }
     }
 
@@ -896,17 +898,53 @@ public class GameScreen implements Screen, ControllerListener {
         float powerupX = heartsStartX;
 
         if (shieldActive) {
+            // Находим соответствующий активный бонус для получения значения альфа
+            float alpha = 1.0f;
+            for (Powerup p : powerups) {
+                if (p.active && p.type == PowerupType.SHIELD) {
+                    alpha = p.blinkAlpha;
+                    break;
+                }
+            }
+            
+            // Отрисовываем иконку бонуса с эффектом мерцания
+            game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(shieldTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            game.batch.setColor(1, 1, 1, 1);
             powerupX += POWERUP_ICON_SIZE + 10;
         }
 
         if (magnetActive) {
+            // Находим соответствующий активный бонус для получения значения альфа
+            float alpha = 1.0f;
+            for (Powerup p : powerups) {
+                if (p.active && p.type == PowerupType.MAGNET) {
+                    alpha = p.blinkAlpha;
+                    break;
+                }
+            }
+            
+            // Отрисовываем иконку бонуса с эффектом мерцания
+            game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(magnetTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            game.batch.setColor(1, 1, 1, 1);
             powerupX += POWERUP_ICON_SIZE + 10;
         }
 
         if (doubleScoreActive) {
+            // Находим соответствующий активный бонус для получения значения альфа
+            float alpha = 1.0f;
+            for (Powerup p : powerups) {
+                if (p.active && p.type == PowerupType.DOUBLE_SCORE) {
+                    alpha = p.blinkAlpha;
+                    break;
+                }
+            }
+            
+            // Отрисовываем иконку бонуса с эффектом мерцания
+            game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(doubleScoreTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
+            game.batch.setColor(1, 1, 1, 1);
         }
 
         // Отрисовка сердечек в соответствии с числом жизней
@@ -1731,6 +1769,11 @@ public class GameScreen implements Screen, ControllerListener {
         boolean hasActiveShield = false;
         boolean hasActiveMagnet = false;
         boolean hasActiveDoubleScore = false;
+        
+        // Переменные для хранения значений мерцания для каждого типа бонуса
+        float shieldBlinkAlpha = 1.0f;
+        float magnetBlinkAlpha = 1.0f;
+        float doubleScoreBlinkAlpha = 1.0f;
 
         // Список бонусов для удаления (истекшие + вышедшие за экран)
         Array<Powerup> toRemove = new Array<Powerup>();
@@ -1748,16 +1791,36 @@ public class GameScreen implements Screen, ControllerListener {
                     // Бонус больше не активен - добавляем в список для удаления
                     toRemove.add(powerup);
                 } else {
-                    // Отмечаем тип активного бонуса
+                    // Вычисляем оставшееся время действия
+                    float remainingTime = powerup.activeDuration - powerup.activeTime;
+                    
+                    // Если до окончания действия бонуса осталось менее 3 секунд, начинаем мерцание
+                    if (remainingTime < 3.0f) {
+                        // Более плавное и медленное синусоидальное мерцание
+                        // Уменьшаем начальную частоту с 3.0f до 1.5f Гц
+                        // Снижаем максимальную частоту с 9.0f до 3.0f Гц
+                        float blinkFrequency = 1.5f + (3.0f - remainingTime) * 0.5f; // Частота увеличивается с 1.5 до 3.0 Гц
+                        
+                        // Используем косинус вместо синуса и умножаем на PI/2 для более плавной кривой
+                        // Увеличиваем минимальную прозрачность до 0.7f (было 0.5f) для менее резкого эффекта
+                        powerup.blinkAlpha = 0.7f + 0.3f * (float)Math.cos(powerup.activeTime * blinkFrequency * Math.PI / 2);
+                    } else {
+                        powerup.blinkAlpha = 1.0f; // Без мерцания при достаточном оставшемся времени
+                    }
+                    
+                    // Отмечаем тип активного бонуса и сохраняем его значение альфа
                     switch (powerup.type) {
                         case SHIELD:
                             hasActiveShield = true;
+                            shieldBlinkAlpha = powerup.blinkAlpha;
                             break;
                         case MAGNET:
                             hasActiveMagnet = true;
+                            magnetBlinkAlpha = powerup.blinkAlpha;
                             break;
                         case DOUBLE_SCORE:
                             hasActiveDoubleScore = true;
+                            doubleScoreBlinkAlpha = powerup.blinkAlpha;
                             break;
                     }
                 }
@@ -1816,6 +1879,11 @@ public class GameScreen implements Screen, ControllerListener {
         shieldActive = hasActiveShield;
         magnetActive = hasActiveMagnet;
         doubleScoreActive = hasActiveDoubleScore;
+        
+        // Сохраняем значения alpha для отрисовки каждого типа бонуса
+        shieldBlinkAlpha = hasActiveShield ? shieldBlinkAlpha : 1.0f;
+        magnetBlinkAlpha = hasActiveMagnet ? magnetBlinkAlpha : 1.0f;
+        doubleScoreBlinkAlpha = hasActiveDoubleScore ? doubleScoreBlinkAlpha : 1.0f;
     }
 
     // Обработка столкновений с астероидами
@@ -2348,9 +2416,19 @@ public class GameScreen implements Screen, ControllerListener {
 
         // Отрисовка эффекта щита, если он активен
         if (shieldActive) {
+            // Получаем значение прозрачности щита для эффекта мерцания
+            float alpha = 0.6f; // Значение по умолчанию
+            for (Powerup p : powerups) {
+                if (p.active && p.type == PowerupType.SHIELD) {
+                    // Изменяем диапазон с 0.3-0.6 на 0.4-0.7 для более яркого и плавного эффекта
+                    alpha = 0.4f + p.blinkAlpha * 0.3f; // От 0.4 до 0.7 для плавного мерцания
+                    break;
+                }
+            }
+            
             // Увеличиваем размер щита относительно корабля
             float shieldSize = SHIP_SIZE * 1.5f;
-            game.batch.setColor(0.4f, 0.8f, 1.0f, 0.6f);
+            game.batch.setColor(0.4f, 0.8f, 1.0f, alpha);
             game.batch.draw(shieldTexture,
                             ship.x - (shieldSize - ship.width) / 2,
                             ship.y - (shieldSize - ship.height) / 2,
