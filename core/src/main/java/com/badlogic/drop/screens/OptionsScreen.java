@@ -28,6 +28,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.drop.utils.UIFactory;
 
 /**
  * Экран настроек игры с управлением звуком и музыкой
@@ -183,17 +184,7 @@ public class OptionsScreen implements Screen {
      * Создает стиль для кнопок
      */
     private void createButtonStyle() {
-        TextButtonStyle textButtonStyle = new TextButtonStyle();
-        textButtonStyle.font = skin.getFont("default-font");
-        textButtonStyle.fontColor = new Color(1, 1, 1, 1);
-        textButtonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
-        textButtonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
-        textButtonStyle.disabledFontColor = skin.getColor("gray");
-        
-        textButtonStyle.up = skin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
-        textButtonStyle.down = skin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
-        textButtonStyle.over = skin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
-        
+        TextButtonStyle textButtonStyle = UIFactory.createSciFiBlueButtonStyle(skin, skin.getFont("default-font"));
         skin.add("default", textButtonStyle);
     }
     

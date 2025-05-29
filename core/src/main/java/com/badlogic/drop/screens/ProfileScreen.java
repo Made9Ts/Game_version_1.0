@@ -26,6 +26,7 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.Scaling;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.drop.utils.UIFactory;
 
 /**
  * Экран профиля пользователя с возможностью авторизации через Google
@@ -37,21 +38,21 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
     private static final float BASE_HEIGHT = 1560;
     
     // Множители для размеров UI на различных типах устройств
-    private static final float PHONE_SCALE = 0.85f;
-    private static final float SMALL_TABLET_SCALE = 1.1f;
-    private static final float LARGE_TABLET_SCALE = 1.35f;
-    private static final float ULTRA_PHONE_SCALE = 1.0f;
+    private static final float PHONE_SCALE = 0.75f;
+    private static final float SMALL_TABLET_SCALE = 0.95f;
+    private static final float LARGE_TABLET_SCALE = 1.15f;
+    private static final float ULTRA_PHONE_SCALE = 0.85f;
     
     // Константы разрешений для определения устройств
     private static final int S24_ULTRA_WIDTH = 1440;
     private static final int S24_ULTRA_HEIGHT = 3120;
     
     // Константы для разметки, которые будут масштабироваться
-    private float buttonWidth = 400;
-    private float buttonHeight = 90;
-    private float padding = 15;
-    private float sectionSpacing = 30;
-    private float titlePadding = 60;
+    private float buttonWidth = 350;
+    private float buttonHeight = 80;
+    private float padding = 12;
+    private float sectionSpacing = 25;
+    private float titlePadding = 45;
     
     private final SpaceCourierGame game;
     private OrthographicCamera camera;
@@ -160,7 +161,7 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
         
         // Добавляем шрифт в скин с уменьшенным размером
         BitmapFont uiFont = game.fontManager.getUIFont();
-        uiFont.getData().setScale(0.85f);
+        uiFont.getData().setScale(0.78f);
         uiFont.setColor(Color.WHITE);
         skin.add("default-font", uiFont);
         
@@ -182,14 +183,11 @@ public class ProfileScreen implements Screen, GoogleAuthListener {
         pixmap.dispose();
         
         // Стиль кнопки
-        TextButtonStyle textButtonStyle = new TextButtonStyle();
-        textButtonStyle.font = skin.getFont("default-font");
-        textButtonStyle.fontColor = skin.getColor("white");
-        textButtonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
-        textButtonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
-        textButtonStyle.up = skin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
-        textButtonStyle.down = skin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
-        textButtonStyle.over = skin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
+        TextButtonStyle textButtonStyle = UIFactory.createSciFiBlueButtonStyle(skin, skin.getFont("default-font"));
+        
+        // Увеличиваем размер шрифта на кнопках
+        textButtonStyle.font.getData().setScale(0.9f);
+        
         skin.add("default", textButtonStyle);
         
         // Стиль метки

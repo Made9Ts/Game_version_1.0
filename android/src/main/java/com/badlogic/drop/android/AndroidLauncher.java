@@ -33,6 +33,7 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
     private static final String TAG = "AndroidLauncher";
     private GoogleAuthManager authManager;
     private SpaceCourierGame game;
+    private boolean wasGamePaused = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,6 +105,30 @@ public class AndroidLauncher extends AndroidApplication implements AuthCallback,
                 game.setFirebaseInterface(firebaseInterface);
             }
         });
+    }
+    
+    @Override
+    protected void onPause() {
+        Log.d(TAG, "onPause вызван - игра приостановлена");
+        super.onPause();
+    }
+    
+    @Override
+    protected void onResume() {
+        Log.d(TAG, "onResume вызван - игра возобновлена");
+        super.onResume();
+        
+        // Восстанавливаем полноэкранный иммерсивный режим
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            int flags = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                      | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_FULLSCREEN;
+            
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
     }
     
     // --- Реализация интерфейса GoogleAuthInterface ---

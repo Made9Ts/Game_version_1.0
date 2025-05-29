@@ -363,3 +363,110 @@ Space Courier (Космический Путешественник) — дина
 ## Разработчики и лицензия
 
 Игра Space Travaler разработана с использованием фреймворка LibGDX.
+
++------------------------+          +---------------------------+
+|   SpaceCourierGame     |<>--------| GoogleAuthInterface      |
+|------------------------|          |---------------------------|
+| +GAME_WIDTH: float     |          | +signIn(): void          |
+| +GAME_HEIGHT: float    |          | +signOut(): void         |
+| +batch: SpriteBatch    |          | +isSignedIn(): boolean   |
+| +fontManager: FontMngr |          | +getUserName(): String   |
+| +achievementSys: AchSys|          | +getUserEmail(): String  |
+| +soundManager: SndMngr |          | +getUserId(): String     |
+| +googleAuthInt: GglAuth|          +---------------------------+
+| +firebaseInt: Firebase |                      ^
+| +googleUserName: String|                      |
+| +isGoogleSignedIn: bool|          +---------------------------+
+|------------------------|          | GoogleAuthListener        |
+| +create(): void        |          |---------------------------|
+| +initResources(): void |          | +onSignInSuccess(): void  |
+| +signInWithGoogle()    |          | +onSignInFailure(): void  |
+| +signOutFromGoogle()   |          +---------------------------+
+| +dispose(): void       |
++------------------------+
+         ^ 1                       +----------------------------+
+         |                         | SoundManager               |
+         |                         |----------------------------|
++------------------------+         | -musicEnabled: boolean     |
+|    GameScreen          |         | -soundEnabled: boolean     |
+|------------------------|         | -musicVolume: float        |
+| -SHIP_SIZE: int        |         | -soundVolume: float        |
+| -ASTEROID_SIZE: int    |         | -music: Music              |
+| -FUEL_CONSUMPTION: flt |         |----------------------------|
+| -MAX_LIVES: int        |         | +playSound(Sound): void    |
+| -ship: Rectangle       |         | +playMusic(Music): void    |
+| -asteroids: Array<Rect>|         | +stopMusic(): void         |
+| -enemies: Array<Rect>  |         | +pauseMusic(): void        |
+| -fuelCanisters: Array  |         | +resumeMusic(): void       |
+| -hearts: Array<Rect>   |         | +setMusicEnabled(bool)     |
+| -score: int            |         | +setSoundEnabled(bool)     |
+| -lives: int            |         | +setMusicVolume(float)     |
+| -fuel: float           |<>-------| +setSoundVolume(float)     |
+| -diffSystem: DiffSys   |         +----------------------------+
+| -boss: Rectangle       |
+| -bossActive: boolean   |
+| -bossHealth: int       |         +----------------------------+
+| -starField: StarField  |<>-------| StarField                  |
+|------------------------|         |----------------------------|
+| +render(float): void   |         | -stars: Array<Star>        |
+| +updateGame(float)     |         | -shootingStars: Array      |
+| +resolveCollisions()   |         |----------------------------|
+| +spawnAsteroid(): void |         | +update(float): void       |
+| +spawnEnemy(): void    |         | +render(SpriteBatch): void |
+| +spawnFuelCanister()   |         | +spawnShootingStar(): void |
+| +spawnBoss(): void     |         +----------------------------+
+| +pauseGame(): void     |
+| +resumeGame(): void    |
++------------------------+
+         |
+         |
+         v                 +---------------------------+
++------------------------+ | DifficultySystem          |
+| <<inner>>              | |---------------------------|
+| GameScreen.Powerup     | | -baseDifficulty: float    |
+|------------------------| | -currentDifficulty: float |
+| +bounds: Rectangle     | | -playerSkill: float       |
+| +type: PowerupType     | | -successCount: int        |
+| +activeDuration: float | | -failureCount: int        |
+| +activeTime: float     | | -survivalTime: float      |
+| +active: boolean       | | -aggressivePlayStyle: flt |
+| +blinkAlpha: float     | | -currentLevel: int        |
+|------------------------| | -levelThresholds: int[]   |
+| +Powerup(x,y,type)     |<|---------------------------|
++------------------------+ | +update(int,float): void  |
+         |                 | +registerSuccess(): void  |
+         |                 | +registerFailure(): void  |
+         v                 | +getDifficulty(): float   |
++------------------------+ | +getCurrentLevel(): int   |
+| <<enumeration>>        | | +hasLevelChanged(): bool  |
+| PowerupType            | +---------------------------+
+|------------------------|
+| SHIELD                 |
+| MAGNET                 |
+| DOUBLE_SCORE           |
++------------------------+
+                           +---------------------------+
++------------------------+ | AchievementSystem        |
+| <<inner>>              | |---------------------------|
+| GameScreen.BossPrjctl  | | -achievements: Array     |
+|------------------------| | -firebaseInt: FirebaseInt|
+| +bounds: Rectangle     | | -userId: String          |
+| +speedX: float         | |---------------------------|
+| +speedY: float         | | +unlockAchievement(String)|
+|------------------------| | +checkAchievements()     |
+| +BossPrjctl(x,y)       | | +syncProgress(): void    |
+| +update(float): void   | | +setUser(String): void   |
+| +isOutOfScreen(): bool | | +dispose(): void         |
++------------------------+ +---------------------------+
+                   
++------------------------+
+| <<inner>>              |
+| GameScreen.PlayerPrjctl|
+|------------------------|
+| +bounds: Rectangle     |
+|------------------------|
+| +PlayerPrjctl(x,y)     |
+| +update(float): void   |
+| +isOutOfScreen(): bool |
++------------------------+
+

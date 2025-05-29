@@ -23,6 +23,7 @@ import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.drop.utils.UIFactory;
 
 /**
  * Экран достижений игрока
@@ -94,11 +95,7 @@ public class AchievementsScreen implements Screen {
         pixmap.dispose();
         
         // Создаем стиль кнопки
-        TextButtonStyle textButtonStyle = new TextButtonStyle();
-        textButtonStyle.font = skin.getFont("default-font");
-        textButtonStyle.fontColor = skin.getColor("white");
-        textButtonStyle.downFontColor = skin.getColor("gray");
-        textButtonStyle.overFontColor = skin.getColor("blue");
+        TextButtonStyle textButtonStyle = UIFactory.createSciFiBlueButtonStyle(skin, skin.getFont("default-font"));
         skin.add("default", textButtonStyle);
         
         // Создаем стиль для заголовка
@@ -214,7 +211,7 @@ public class AchievementsScreen implements Screen {
                 dispose();
             }
         });
-        rootTable.add(backButton).width(200).height(80).padBottom(20);
+        rootTable.add(backButton).width(220).height(90).padBottom(20);
         
         // Добавляем корневую таблицу на сцену
         stage.addActor(rootTable);

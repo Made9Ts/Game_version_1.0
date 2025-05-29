@@ -19,6 +19,8 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.drop.utils.UIFactory;
+import com.badlogic.drop.utils.SciFiDrawable;
 
 /**
  * Экран главного меню игры, адаптированный для Samsung Galaxy S24 Ultra
@@ -116,22 +118,17 @@ public class MainMenuScreen implements Screen {
         skin.add("white-pixel", new Texture(pixmap));
         pixmap.dispose();
         
-        // Создаем стиль кнопки с улучшенным визуальным стилем
-        TextButtonStyle textButtonStyle = new TextButtonStyle();
-        textButtonStyle.font = skin.getFont("default-font");
-        // Гарантируем, что цвет текста остается белым для всех состояний кнопки
-        textButtonStyle.fontColor = new Color(1, 1, 1, 1);
-        textButtonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
-        textButtonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
-        textButtonStyle.disabledFontColor = skin.getColor("gray");
+        // Создаем единый стиль sci-fi кнопок - прямоугольный с голубым цветом
+        TextButtonStyle buttonStyle = UIFactory.createSciFiButtonStyle(
+            skin, skin.getFont("default-font"), 
+            SciFiDrawable.ButtonShape.RECTANGULAR, 
+            new Color(0.1f, 0.4f, 0.7f, 1f));  // Более насыщенный темно-голубой цвет
         
-        // Добавляем фоны для кнопок
-        textButtonStyle.up = skin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
-        textButtonStyle.down = skin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
-        textButtonStyle.over = skin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
+        // Увеличиваем размер шрифта для кнопок
+        buttonStyle.font.getData().setScale(1.2f);
         
         // Добавляем стиль в скин
-        skin.add("default", textButtonStyle);
+        skin.add("default", buttonStyle);
     }
     
     private void createUI() {
@@ -140,24 +137,27 @@ public class MainMenuScreen implements Screen {
         table.setFillParent(true);
         table.center();
         
-        // Создаем кнопки (используем латиницу)
+        // Создаем кнопки с одинаковым sci-fi стилем
         TextButton playButton = new TextButton("Играть", skin);
         TextButton profileButton = new TextButton("Профиль", skin);
+        TextButton highscoreButton = new TextButton("Рекорды", skin);
         TextButton optionsButton = new TextButton("Настройки", skin);
         TextButton exitButton = new TextButton("Выход", skin);
         
         // Добавляем отступ сверху для заголовка (увеличен для больших экранов)
-        table.add().height(120);
+        table.add().height(280);
         table.row();
         
-        // Настраиваем размеры кнопок и добавляем их в таблицу (увеличены для больших экранов)
-        table.add(playButton).width(450).height(120).pad(20);
+        // Настраиваем размеры кнопок и добавляем их в таблицу с отступами для визуального разделения
+        table.add(playButton).width(450).height(120).pad(25);
         table.row();
-        table.add(profileButton).width(450).height(120).pad(20);
+        table.add(profileButton).width(450).height(120).pad(25);
         table.row();
-        table.add(optionsButton).width(450).height(120).pad(20);
+        table.add(highscoreButton).width(450).height(120).pad(25);
         table.row();
-        table.add(exitButton).width(450).height(120).pad(20);
+        table.add(optionsButton).width(450).height(120).pad(25);
+        table.row();
+        table.add(exitButton).width(450).height(120).pad(25);
         
         // Добавляем обработчики событий на кнопки
         playButton.addListener(new ClickListener() {
@@ -172,6 +172,14 @@ public class MainMenuScreen implements Screen {
             @Override
             public void clicked(InputEvent event, float x, float y) {
                 game.setScreen(new ProfileScreen(game));
+                dispose();
+            }
+        });
+        
+        highscoreButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                game.setScreen(new HighscoreScreen(game));
                 dispose();
             }
         });

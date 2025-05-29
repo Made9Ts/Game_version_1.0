@@ -18,6 +18,13 @@ allprojects {
   apply plugin: 'eclipse'
   apply plugin: 'idea'
 
+  // Установка версии Java для всех проектов
+  tasks.withType(JavaCompile).configureEach {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    options.compilerArgs << '-Xdoclint:none'
+  }
+
   // This allows you to "Build and run using IntelliJ IDEA", an option in IDEA's Settings.
   idea {
     module {
@@ -80,7 +87,8 @@ allprojects {
 configure(subprojects - project(':android')) {
   apply plugin: 'java-library'
   apply plugin: 'groovy'
-  sourceCompatibility = 8
+  sourceCompatibility = 17
+  targetCompatibility = 17
 
   // From https://lyze.dev/2021/04/29/libGDX-Internal-Assets-List/
   // The article can be helpful when using assets.txt in your project.
@@ -104,6 +112,8 @@ configure(subprojects - project(':android')) {
 
   compileJava {
     options.incremental = true
+    sourceCompatibility = JavaVersion.VERSION_17 
+    targetCompatibility = JavaVersion.VERSION_17
   }
 }
 

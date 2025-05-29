@@ -40,6 +40,7 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import java.util.Iterator;
+import com.badlogic.drop.utils.UIFactory;
 
 /**
  * Основной экран игрового процесса, адаптированный для Samsung Galaxy S24 Ultra.
@@ -172,7 +173,7 @@ public class GameScreen implements Screen, ControllerListener {
     private TextButton pauseMenuButton;
     private boolean isPaused;
     private Rectangle pauseButtonRect;
-    
+
     // Элементы управления звуком в меню паузы
     private CheckBox pauseMusicCheckbox;
     private CheckBox pauseSfxCheckbox;
@@ -776,41 +777,41 @@ public class GameScreen implements Screen, ControllerListener {
      */
     private void drawGame(float delta) {
         game.batch.begin();
-        
+
         // Рисуем фон
         game.batch.draw(backgroundImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
-        
+
         // Рисуем звездное поле поверх фона
         starField.render(game.batch);
-        
+
         // Отрисовка объектов только если игра не окончена
         if (!gameOver || forceGameOverRender) {
             // Рисуем игровые объекты
             drawGameObjects();
-            
+
             // Рисуем игровой интерфейс
             drawGameInterface();
-            
+
             // Отрисовка анимаций и уведомлений
             if (showLevelUpAnimation) {
                 drawLevelUpAnimation(delta);
             }
-            
+
             if (achievementNotificationActive) {
                 drawAchievementNotification(delta);
             }
-            
+
             if (lowFuelWarningActive) {
                 drawLowFuelWarning(delta);
             }
-            
+
             // Отрисовка кнопки паузы (если игра не на паузе)
             if (!isPaused && pauseButtonTexture != null) {
                 game.batch.draw(pauseButtonTexture, pauseButtonRect.x, pauseButtonRect.y,
                              pauseButtonRect.width, pauseButtonRect.height);
             }
         }
-        
+
         game.batch.end();
     }
 
@@ -906,7 +907,7 @@ public class GameScreen implements Screen, ControllerListener {
                     break;
                 }
             }
-            
+
             // Отрисовываем иконку бонуса с эффектом мерцания
             game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(shieldTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
@@ -923,7 +924,7 @@ public class GameScreen implements Screen, ControllerListener {
                     break;
                 }
             }
-            
+
             // Отрисовываем иконку бонуса с эффектом мерцания
             game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(magnetTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
@@ -940,7 +941,7 @@ public class GameScreen implements Screen, ControllerListener {
                     break;
                 }
             }
-            
+
             // Отрисовываем иконку бонуса с эффектом мерцания
             game.batch.setColor(1, 1, 1, alpha);
             game.batch.draw(doubleScoreTexture, powerupX, powerupY, POWERUP_ICON_SIZE, POWERUP_ICON_SIZE);
@@ -1464,10 +1465,13 @@ public class GameScreen implements Screen, ControllerListener {
         if (lives <= 0) {
             // Игра окончена
             gameOver = true;
+            
+            // Сохраняем рекорд в Preferences
+            HighscoreScreen.updateHighscore(score, gameTime);
 
             // Обновляем текст с финальным счетом
             if (gameOverStage != null && scoreLabel != null) {
-                scoreLabel.setText("SCORE: " + score);
+                scoreLabel.setText("Очки: " + score);
             }
 
             // Останавливаем музыку
@@ -1506,27 +1510,37 @@ public class GameScreen implements Screen, ControllerListener {
     @Override
     public void pause() {
         // Пауза игры (для мобильных устройств)
+        pauseGame();
+        Gdx.app.log("GameScreen", "Игра автоматически приостановлена при блокировке экрана");
     }
 
     @Override
     public void resume() {
-        isPaused = false;
-        // Устанавливаем null для ввода (как в методе show)
-        Gdx.input.setInputProcessor(null);
-
-        // Возобновляем музыку через SoundManager
-        game.soundManager.resumeMusic();
-
-        // Освобождаем ресурсы паузы
+        // Необходимо сбросить состояние для правильного возобновления
+        Gdx.app.log("GameScreen", "Игра возобновлена после блокировки экрана");
+        
+        // Только если игра не на паузе (т.е. пользователь не вызвал паузу вручную перед блокировкой)
+        // пересоздаем экран паузы
+        if (!isPaused) {
+            Gdx.app.log("GameScreen", "Нормальное возобновление, пауза не активирована");
+            return;
+        }
+        
+        // Если пользователь уже находился в меню паузы до блокировки экрана,
+        // не нужно пересоздавать меню паузы, так как pauseGame() уже все настроил
         if (pauseStage != null) {
-            pauseStage.dispose();
-            pauseStage = null;
+            Gdx.app.log("GameScreen", "Меню паузы уже существует");
+            // Убедимся, что обработчик ввода установлен на сцену паузы
+            Gdx.input.setInputProcessor(pauseStage);
+            return;
         }
-
-        if (pauseSkin != null) {
-            pauseSkin.dispose();
-            pauseSkin = null;
-        }
+        
+        // Только если меню паузы было удалено по какой-то причине,
+        // создаем его заново
+        Gdx.app.log("GameScreen", "Пересоздание меню паузы");
+        pauseStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
+        createPauseUI();
+        Gdx.input.setInputProcessor(pauseStage);
     }
 
     @Override
@@ -1597,20 +1611,8 @@ public class GameScreen implements Screen, ControllerListener {
         gameOverSkin.add("white-pixel", new Texture(pixmap));
         pixmap.dispose();
 
-        // Стиль для кнопок - как в главном меню (синие)
-        TextButtonStyle buttonStyle = new TextButtonStyle();
-        buttonStyle.font = gameOverSkin.getFont("game-font");
-        // Гарантируем, что цвет текста остается белым для всех состояний кнопки
-        buttonStyle.fontColor = new Color(1, 1, 1, 1);
-        buttonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
-        buttonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
-        buttonStyle.disabledFontColor = gameOverSkin.getColor("gray");
-
-        // Добавляем фоны для кнопок - как в главном меню
-        buttonStyle.up = gameOverSkin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
-        buttonStyle.down = gameOverSkin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
-        buttonStyle.over = gameOverSkin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
-
+        // Создаем стиль кнопки с закругленными углами для паузы
+        TextButtonStyle buttonStyle = UIFactory.createSciFiBlueButtonStyle(gameOverSkin, gameOverSkin.getFont("game-font"));
         gameOverSkin.add("default", buttonStyle);
 
         // Стиль для заголовка и счета без фона
@@ -1632,23 +1634,23 @@ public class GameScreen implements Screen, ControllerListener {
         background.setBackground(gameOverSkin.newDrawable("white-pixel", new Color(0, 0, 0, 0.6f)));
         gameOverStage.addActor(background);
 
-        // Создаем кнопки с крупным понятным текстом
-        TextButton gameOverTitle = new TextButton("GAME OVER", titleStyle);
-        gameOverTitle.getLabel().setFontScale(1.5f); // Увеличиваем размер текста заголовка
+        // Создаем кнопки с понятным текстом
+        TextButton gameOverTitle = new TextButton("Игра окончена", titleStyle);
+        gameOverTitle.getLabel().setFontScale(1.2f); // Уменьшенный размер текста заголовка
         gameOverTitle.setDisabled(true);
 
         // Создаем кнопки и настраиваем размер шрифта
-        restartButton = new TextButton("RESTART", buttonStyle);
+        restartButton = new TextButton("Заново", buttonStyle);
         restartButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
 
-        menuButton = new TextButton("MAIN MENU", buttonStyle);
+        menuButton = new TextButton("Главное меню", buttonStyle);
         menuButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
 
         // Добавляем заголовок
         gameOverTable.add(gameOverTitle).padBottom(60).row();
 
         // Отображаем финальный счет (будет обновляться при проигрыше)
-        scoreLabel = new TextButton("SCORE: 0", titleStyle);
+        scoreLabel = new TextButton("Очки: 0", titleStyle);
         scoreLabel.setDisabled(true);
         gameOverTable.add(scoreLabel).padBottom(50).row();
 
@@ -1769,7 +1771,7 @@ public class GameScreen implements Screen, ControllerListener {
         boolean hasActiveShield = false;
         boolean hasActiveMagnet = false;
         boolean hasActiveDoubleScore = false;
-        
+
         // Переменные для хранения значений мерцания для каждого типа бонуса
         float shieldBlinkAlpha = 1.0f;
         float magnetBlinkAlpha = 1.0f;
@@ -1793,21 +1795,21 @@ public class GameScreen implements Screen, ControllerListener {
                 } else {
                     // Вычисляем оставшееся время действия
                     float remainingTime = powerup.activeDuration - powerup.activeTime;
-                    
+
                     // Если до окончания действия бонуса осталось менее 3 секунд, начинаем мерцание
                     if (remainingTime < 3.0f) {
                         // Более плавное и медленное синусоидальное мерцание
                         // Уменьшаем начальную частоту с 3.0f до 1.5f Гц
                         // Снижаем максимальную частоту с 9.0f до 3.0f Гц
                         float blinkFrequency = 1.5f + (3.0f - remainingTime) * 0.5f; // Частота увеличивается с 1.5 до 3.0 Гц
-                        
+
                         // Используем косинус вместо синуса и умножаем на PI/2 для более плавной кривой
                         // Увеличиваем минимальную прозрачность до 0.7f (было 0.5f) для менее резкого эффекта
                         powerup.blinkAlpha = 0.7f + 0.3f * (float)Math.cos(powerup.activeTime * blinkFrequency * Math.PI / 2);
                     } else {
                         powerup.blinkAlpha = 1.0f; // Без мерцания при достаточном оставшемся времени
                     }
-                    
+
                     // Отмечаем тип активного бонуса и сохраняем его значение альфа
                     switch (powerup.type) {
                         case SHIELD:
@@ -1879,7 +1881,7 @@ public class GameScreen implements Screen, ControllerListener {
         shieldActive = hasActiveShield;
         magnetActive = hasActiveMagnet;
         doubleScoreActive = hasActiveDoubleScore;
-        
+
         // Сохраняем значения alpha для отрисовки каждого типа бонуса
         shieldBlinkAlpha = hasActiveShield ? shieldBlinkAlpha : 1.0f;
         magnetBlinkAlpha = hasActiveMagnet ? magnetBlinkAlpha : 1.0f;
@@ -2078,22 +2080,10 @@ public class GameScreen implements Screen, ControllerListener {
         pauseSkin.add("white-pixel", new Texture(pixmap));
         pixmap.dispose();
 
-        // Стиль для кнопок
-        TextButtonStyle buttonStyle = new TextButtonStyle();
-        buttonStyle.font = pauseSkin.getFont("game-font");
-        // Гарантируем, что цвет текста остается белым для всех состояний кнопки
-        buttonStyle.fontColor = new Color(1, 1, 1, 1);
-        buttonStyle.downFontColor = new Color(0.9f, 0.9f, 0.9f, 1);
-        buttonStyle.overFontColor = new Color(0.8f, 0.8f, 1, 1);
-        buttonStyle.disabledFontColor = pauseSkin.getColor("gray");
-
-        // Добавляем фоны для кнопок - как в главном меню
-        buttonStyle.up = pauseSkin.newDrawable("white-pixel", new Color(0.2f, 0.3f, 0.5f, 0.8f));
-        buttonStyle.down = pauseSkin.newDrawable("white-pixel", new Color(0.1f, 0.2f, 0.4f, 0.9f));
-        buttonStyle.over = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.4f, 0.6f, 0.8f));
-
+        // Создаем стиль кнопок с закругленными углами
+        TextButtonStyle buttonStyle = UIFactory.createSciFiBlueButtonStyle(pauseSkin, pauseSkin.getFont("game-font"));
         pauseSkin.add("default", buttonStyle);
-        
+
         // Создаем стили для элементов управления звуком
         createSoundControlStyles();
 
@@ -2116,49 +2106,49 @@ public class GameScreen implements Screen, ControllerListener {
         pauseStage.addActor(background);
 
         // Создаем заголовок паузы
-        TextButton pauseTitle = new TextButton("ПАУЗА", titleStyle);
+        TextButton pauseTitle = new TextButton("Пауза", titleStyle);
         pauseTitle.getLabel().setFontScale(1.5f); // Увеличиваем размер текста заголовка
         pauseTitle.setDisabled(true);
 
         // Создаем кнопки и настраиваем размер шрифта
-        continueButton = new TextButton("ПРОДОЛЖИТЬ", buttonStyle);
+        continueButton = new TextButton("Продолжить", buttonStyle);
         continueButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
 
-        pauseMenuButton = new TextButton("ГЛАВНОЕ МЕНЮ", buttonStyle);
+        pauseMenuButton = new TextButton("Главное меню", buttonStyle);
         pauseMenuButton.getLabel().setFontScale(1.3f); // Увеличиваем размер текста
-        
+
         // Создаем элементы управления звуком
         createSoundControlElements();
 
         // Добавляем заголовок
         pauseTable.add(pauseTitle).padBottom(20).row();  // Уменьшаю отступ с 40 до 20
-        
+
         // Добавляем кнопку "ПРОДОЛЖИТЬ" сразу после заголовка
         pauseTable.add(continueButton).width(450).height(100).padTop(0).padBottom(30).row();  // Убираю padTop и увеличиваю padBottom
-        
+
         // Секция управления музыкой
         Table musicSection = new Table();
         musicSection.add(pauseMusicCheckbox).left().padBottom(10);
         musicSection.row();
-        
+
         Table musicSliderSection = new Table();
         musicSliderSection.add(new Label("Громкость:", pauseSkin)).padRight(10);
         musicSliderSection.add(pauseMusicVolumeSlider).width(200);
         musicSliderSection.add(pauseMusicVolumeLabel).width(40).padLeft(10);
-        
+
         musicSection.add(musicSliderSection).padLeft(20);
         pauseTable.add(musicSection).width(400).padBottom(20).row();
-        
+
         // Секция управления звуковыми эффектами
         Table sfxSection = new Table();
         sfxSection.add(pauseSfxCheckbox).left().padBottom(10);
         sfxSection.row();
-        
+
         Table sfxSliderSection = new Table();
         sfxSliderSection.add(new Label("Громкость:", pauseSkin)).padRight(10);
         sfxSliderSection.add(pauseSfxVolumeSlider).width(200);
         sfxSliderSection.add(pauseSfxVolumeLabel).width(40).padLeft(10);
-        
+
         sfxSection.add(sfxSliderSection).padLeft(20);
         pauseTable.add(sfxSection).width(400).padBottom(30).row();
 
@@ -2207,7 +2197,7 @@ public class GameScreen implements Screen, ControllerListener {
         // Добавляем таблицу на сцену
         pauseStage.addActor(pauseTable);
     }
-    
+
     /**
      * Создает стили для элементов управления звуком в меню паузы
      */
@@ -2217,7 +2207,7 @@ public class GameScreen implements Screen, ControllerListener {
         labelStyle.font = pauseSkin.getFont("game-font");
         labelStyle.fontColor = pauseSkin.getColor("white");
         pauseSkin.add("default", labelStyle);
-        
+
         // Стиль для чекбоксов
         CheckBox.CheckBoxStyle checkBoxStyle = new CheckBox.CheckBoxStyle();
         checkBoxStyle.checkboxOn = pauseSkin.newDrawable("white-pixel", new Color(0.3f, 0.6f, 0.9f, 1));
@@ -2229,7 +2219,7 @@ public class GameScreen implements Screen, ControllerListener {
         checkBoxStyle.checkboxOff.setMinWidth(30);
         checkBoxStyle.checkboxOff.setMinHeight(30);
         pauseSkin.add("default", checkBoxStyle);
-        
+
         // Стиль для слайдеров
         Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
         sliderStyle.background = pauseSkin.newDrawable("white-pixel", new Color(0.2f, 0.2f, 0.3f, 1));
@@ -2239,31 +2229,31 @@ public class GameScreen implements Screen, ControllerListener {
         sliderStyle.knob.setMinHeight(30);
         pauseSkin.add("default-horizontal", sliderStyle);
     }
-    
+
     /**
      * Создает элементы управления звуком для меню паузы
      */
     private void createSoundControlElements() {
         // Создаем чекбоксы для настроек звука
-        pauseMusicCheckbox = new CheckBox(" МУЗЫКА", pauseSkin);
-        pauseSfxCheckbox = new CheckBox(" SFX-ЗВУКИ", pauseSkin);
-        
+        pauseMusicCheckbox = new CheckBox(" Музыка", pauseSkin);
+        pauseSfxCheckbox = new CheckBox(" SFX-звуки", pauseSkin);
+
         // Устанавливаем начальные значения чекбоксов
         pauseMusicCheckbox.setChecked(game.soundManager.isMusicEnabled());
         pauseSfxCheckbox.setChecked(game.soundManager.isSfxEnabled());
-        
+
         // Создаем ползунки громкости
         pauseMusicVolumeSlider = new Slider(0, 100, 1, false, pauseSkin, "default-horizontal");
         pauseSfxVolumeSlider = new Slider(0, 100, 1, false, pauseSkin, "default-horizontal");
-        
+
         // Устанавливаем начальные значения ползунков
         pauseMusicVolumeSlider.setValue(game.soundManager.getMusicVolume() * 100);
         pauseSfxVolumeSlider.setValue(game.soundManager.getSfxVolume() * 100);
-        
+
         // Создаем метки для отображения значений громкости
         pauseMusicVolumeLabel = new Label(String.valueOf((int)pauseMusicVolumeSlider.getValue()), pauseSkin);
         pauseSfxVolumeLabel = new Label(String.valueOf((int)pauseSfxVolumeSlider.getValue()), pauseSkin);
-        
+
         // Добавляем обработчики событий на чекбоксы
         pauseMusicCheckbox.addListener(new ChangeListener() {
             @Override
@@ -2273,7 +2263,7 @@ public class GameScreen implements Screen, ControllerListener {
                 pauseMusicVolumeSlider.setDisabled(!enabled);
             }
         });
-        
+
         pauseSfxCheckbox.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
@@ -2282,7 +2272,7 @@ public class GameScreen implements Screen, ControllerListener {
                 pauseSfxVolumeSlider.setDisabled(!enabled);
             }
         });
-        
+
         // Добавляем обработчики событий на ползунки
         pauseMusicVolumeSlider.addListener(new ChangeListener() {
             @Override
@@ -2290,21 +2280,21 @@ public class GameScreen implements Screen, ControllerListener {
                 float value = pauseMusicVolumeSlider.getValue() / 100f;
                 game.soundManager.setMusicVolume(value);
                 pauseMusicVolumeLabel.setText(String.valueOf((int)pauseMusicVolumeSlider.getValue()));
-                
+
                 // Обновляем музыку для немедленного применения эффекта
                 if (game.soundManager.isMusicEnabled()) {
                     game.soundManager.resumeMusic();
                 }
             }
         });
-        
+
         pauseSfxVolumeSlider.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 float value = pauseSfxVolumeSlider.getValue() / 100f;
                 game.soundManager.setSfxVolume(value);
                 pauseSfxVolumeLabel.setText(String.valueOf((int)pauseSfxVolumeSlider.getValue()));
-                
+
                 // Проиграем тестовый звук для демонстрации уровня громкости
                 if (game.soundManager.isSfxEnabled() && pauseSfxVolumeSlider.isDragging()) {
                     // Получаем звук из GameScreen
@@ -2318,7 +2308,7 @@ public class GameScreen implements Screen, ControllerListener {
                 }
             }
         });
-        
+
         // Устанавливаем начальное состояние ползунков в зависимости от чекбоксов
         pauseMusicVolumeSlider.setDisabled(!pauseMusicCheckbox.isChecked());
         pauseSfxVolumeSlider.setDisabled(!pauseSfxCheckbox.isChecked());
@@ -2338,8 +2328,9 @@ public class GameScreen implements Screen, ControllerListener {
         // Останавливаем музыку
         game.soundManager.pauseMusic();
 
-        // Убеждаемся, что pauseStage инициализирован
+        // Если pauseStage был удален, пересоздаем его
         if (pauseStage == null) {
+            pauseStage = new Stage(new FitViewport(GAME_WIDTH, GAME_HEIGHT, camera));
             createPauseUI();
         }
 
@@ -2425,7 +2416,7 @@ public class GameScreen implements Screen, ControllerListener {
                     break;
                 }
             }
-            
+
             // Увеличиваем размер щита относительно корабля
             float shieldSize = SHIP_SIZE * 1.5f;
             game.batch.setColor(0.4f, 0.8f, 1.0f, alpha);
